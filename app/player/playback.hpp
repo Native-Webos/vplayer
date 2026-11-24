@@ -36,6 +36,7 @@ class FrameSink {
         int pitch[3] = {0, 0, 0};        // bytes per row of Y, U, V
         int lines[3] = {0, 0, 0};        // rows allocated per plane
         int sar_num = 1, sar_den = 1;    // sample aspect ratio (non-square pixels)
+        bool full_range = false;         // J420 (0-255) rather than I420 (16-235)
         // The part of width×height that is picture: libVLC's video callbacks are given the coded size
         // (1280×738 for a 1280×720 H.264 stream), so the visible size comes from the track (0: all).
         int visible_width = 0, visible_height = 0;

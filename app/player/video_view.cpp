@@ -48,9 +48,9 @@ GLuint compile(GLenum type, const char *src) {
     return s;
 }
 
-// Limited-range YUV → RGB, column-major for GL. Rows: R, G, B; columns: Y, U, V.
-void yuv_matrix(bool bt709, float m[9]) {
-    const float ys = 255.0f / 219.0f, cs = 255.0f / 224.0f;
+// YUV → RGB, column-major for GL. Rows: R, G, B; columns: Y, U, V. Limited range unless `full`.
+void yuv_matrix(bool bt709, bool full, float m[9]) {
+    const float ys = full ? 1.0f : 255.0f / 219.0f, cs = full ? 1.0f : 255.0f / 224.0f;
     float kr = 0.299f, kb = 0.114f;
     if (bt709) kr = 0.2126f, kb = 0.0722f;
     const float kg = 1 - kr - kb;
@@ -211,9 +211,9 @@ void VideoView::render_gl(const wnk::render::CustomTarget &t, double) {
 
     glUseProgram(program_);
     float m[9];
-    yuv_matrix(vh >= 720, m);
+    yuv_matrix(vh >= 720, fmt_.full_range, m);
     glUniformMatrix3fv(loc_matrix_, 1, GL_FALSE, m);
-    glUniform3f(loc_offset_, 16.0f / 255, 128.0f / 255, 128.0f / 255);
+    glUniform3f(loc_offset_, fmt_.full_range ? 0.0f : 16.0f / 255, 128.0f / 255, 128.0f / 255);
     glUniform2f(loc_scale_, static_cast<float>(vw) / fmt_.pitch[0], static_cast<float>(vh) / fmt_.height);
     for (int i = 0; i < 3; ++i) {
         glActiveTexture(GL_TEXTURE0 + i);

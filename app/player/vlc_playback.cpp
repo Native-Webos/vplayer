@@ -9,6 +9,8 @@
 #include "wnk/log.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 
@@ -142,6 +144,11 @@ class VlcPlayback final : public Playback {
         const libvlc_state_t s = libvlc_media_player_get_state(mp_);
         if (s == libvlc_Playing || s == libvlc_Paused) started_ = true;
         if (started_ && describe_.empty()) describe_tracks();
+        const auto now = std::chrono::steady_clock::now();
+        if (s == libvlc_Playing && now >= next_report_) {
+            if (next_report_.time_since_epoch().count() != 0) report();
+            next_report_ = now + std::chrono::seconds(5);
+        }
     }
 
     // ---- tracks ----
@@ -324,11 +331,32 @@ class VlcPlayback final : public Playback {
     }
 
     // ---- libvlc video callbacks (VLC's video output thread) ----
+    void report() {
+        libvlc_media_t *m = libvlc_media_player_get_media(mp_);
+        libvlc_media_stats_t st{};
+        const bool have = m != nullptr && libvlc_media_get_stats(m, &st);
+        if (m != nullptr) libvlc_media_release(m);
+        const int handed = displayed_.exchange(0);
+        const int64_t gap = max_gap_us_.exchange(0);
+        WNK_LOGI(kCat, "vlc: 5 s: %d pictures handed over (longest gap %lld ms); VLC: %d shown, %d lost, %d decoded",
+                 handed, static_cast<long long>(gap / 1000), have ? st.i_displayed_pictures - last_shown_ : -1,
+                 have ? st.i_lost_pictures - last_lost_ : -1, have ? st.i_decoded_video : -1);
+        if (have) {
+            last_shown_ = st.i_displayed_pictures;
+            last_lost_ = st.i_lost_pictures;
+        }
+    }
+
     static unsigned setup_cb(void **opaque, char *chroma, unsigned *width, unsigned *height, unsigned *pitches,
                              unsigned *lines) {
         auto *self = static_cast<VlcPlayback *>(*opaque);
-        std::memcpy(chroma, "I420", 4);
+        // Full-range 4:2:0 (phones, cameras, MJPEG) is taken as it is: asking for I420 would make VLC
+        // convert every picture's range with swscale on its output thread. The shader expands it.
+        const bool full = std::memcmp(chroma, "J420", 4) == 0;
+        char decoder_chroma[5] = {chroma[0], chroma[1], chroma[2], chroma[3], 0};
+        std::memcpy(chroma, full ? "J420" : "I420", 4);
         FrameSink::Format f;
+        f.full_range = full;
         f.width = static_cast<int>(*width);
         f.height = static_cast<int>(*height);
         self->sink_->configure(f);
@@ -336,7 +364,7 @@ class VlcPlayback final : public Playback {
             pitches[i] = static_cast<unsigned>(f.pitch[i]);
             lines[i] = static_cast<unsigned>(f.lines[i]);
         }
-        WNK_LOGI(kCat, "vlc: video %ux%u I420", *width, *height);
+        WNK_LOGI(kCat, "vlc: video %ux%u, decoder %s, taken as %s", *width, *height, decoder_chroma, full ? "J420" : "I420");
         return 3;
     }
     static void cleanup_cb(void *) {}
@@ -349,11 +377,27 @@ class VlcPlayback final : public Playback {
     }
     static void unlock_cb(void *, void *, void *const *) {}
     static void display_cb(void *opaque, void *picture) {
-        static_cast<VlcPlayback *>(opaque)->sink_->end_write(static_cast<int>(reinterpret_cast<intptr_t>(picture)));
+        auto *self = static_cast<VlcPlayback *>(opaque);
+        self->sink_->end_write(static_cast<int>(reinterpret_cast<intptr_t>(picture)));
+        // For the 5-second report: pictures handed over and the longest gap between two.
+        const int64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch()).count();
+        const int64_t last = self->last_display_us_.exchange(now);
+        if (last > 0) {
+            int64_t gap = now - last, prev = self->max_gap_us_.load();
+            while (gap > prev && !self->max_gap_us_.compare_exchange_weak(prev, gap)) {}
+        }
+        self->displayed_.fetch_add(1);
     }
 
     libvlc_media_player_t *mp_ = nullptr;
     std::shared_ptr<FrameSink> sink_;
+    // Frame-drop diagnosis (RESEARCH.md §10): display callbacks counted on VLC's thread, reported
+    // with libVLC's own statistics every 5 seconds while playing.
+    std::atomic<int64_t> last_display_us_{0}, max_gap_us_{0};
+    std::atomic<int> displayed_{0};
+    std::chrono::steady_clock::time_point next_report_{};
+    int last_lost_ = 0, last_shown_ = 0;
     std::string error_, describe_;
     bool started_ = false;
 };

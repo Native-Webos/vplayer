@@ -24,8 +24,8 @@ void FrameSink::configure(Format &fmt) {
     const size_t total = plane_offset_[2] + static_cast<size_t>(fmt.pitch[2]) * fmt.lines[2];
     for (auto &b : buf_) {
         b.assign(total, 0);
-        // Black in limited-range YUV: Y 16, U/V 128.
-        std::fill(b.begin(), b.begin() + static_cast<std::ptrdiff_t>(plane_offset_[1]), uint8_t{16});
+        // Black: Y 16 (limited range) or 0 (full range), U/V 128.
+        std::fill(b.begin(), b.begin() + static_cast<std::ptrdiff_t>(plane_offset_[1]), uint8_t{fmt.full_range ? 0 : 16});
         std::fill(b.begin() + static_cast<std::ptrdiff_t>(plane_offset_[1]), b.end(), uint8_t{128});
     }
     fmt.visible_width = fmt_.visible_width;
