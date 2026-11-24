@@ -17,6 +17,23 @@ namespace {
 constexpr const char *kCat = "vlc";
 }
 
+std::string file_uri(const std::string &path) {
+    static const char hex[] = "0123456789ABCDEF";
+    std::string out = "file://";
+    for (const char ch : path) {
+        const auto c = static_cast<unsigned char>(ch);
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '/' || c == '-' ||
+            c == '_' || c == '.' || c == '~') {
+            out += ch;
+        } else {
+            out += '%';
+            out += hex[c >> 4];
+            out += hex[c & 15];
+        }
+    }
+    return out;
+}
+
 #if VPLAYER_HAVE_LIBVLC
 
 namespace {

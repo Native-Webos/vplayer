@@ -4,6 +4,7 @@
 // callbacks in I420, copied into a FrameSink; audio is VLC's own (PulseAudio on the TV). VLC also
 // blends subtitles and runs its video filters (deinterlace, adjust) before the callback.
 #include "player/playback.hpp"
+#include "vlc_engine.hpp"
 
 #include "wnk/log.hpp"
 
@@ -165,7 +166,7 @@ class VlcPlayback final : public Playback {
     }
     bool add_subtitle_file(const std::string &path) override {
         if (!mp_) return false;
-        const std::string uri = "file://" + path;
+        const std::string uri = file_uri(path);
         return libvlc_media_player_add_slave(mp_, libvlc_media_slave_type_subtitle, uri.c_str(), true) == 0;
     }
     std::vector<TrackOption> video_tracks() const override {

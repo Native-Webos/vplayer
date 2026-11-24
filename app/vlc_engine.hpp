@@ -29,6 +29,9 @@ struct VlcInfo {
     std::vector<std::string> audio_outputs;  // module names libVLC could load (pulse, alsa, ...)
 };
 
+// An absolute local path as a file:// URI for libVLC (percent-encoded: spaces, '#', '%', non-ASCII).
+std::string file_uri(const std::string &path);
+
 class VlcEngine {
  public:
     // app_dir: the directory holding the executable (LaunchInfo::app_dir).
