@@ -4,6 +4,7 @@
 #include "player/dovi_detect.hpp"
 #include "player/mkv_attachments.hpp"
 #include "player/subtitle_bitmap.hpp"
+#include "player/teletext.hpp"
 #include "player/subtitle_text.hpp"
 #include "vlc_engine.hpp"
 
@@ -152,7 +153,8 @@ struct VlcSource::Stream {
     unsigned width = 0, height = 0, fps_num = 0, fps_den = 0, rate = 0, channels = 0;
     media::VideoColour colour;
     std::string encoding;  // subtitles: the declared character set, if any
-    std::unique_ptr<BitmapSubtitleDecoder> bitmap;  // PGS, DVD subtitles
+    std::unique_ptr<BitmapSubtitleDecoder> bitmap;  // PGS, DVD, DVB subtitles
+    std::unique_ptr<TeletextDecoder> teletext;      // teletext subtitles
     bool removed = false;
     bool awaiting_flush = false;  // a seek was asked: what arrives before VLC's flush is from before it
 };
@@ -492,6 +494,8 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
         s->es_id = d->es_id;
         s->codec = d->codec;
         if (d->encoding) s->encoding = d->encoding;
+        if (d->codec == fourcc('t', 'e', 'l', 'x'))
+            s->teletext = std::make_unique<TeletextDecoder>(d->teletext_magazine, d->teletext_page);
         if (kind == media::SubtitleKind::Bitmap)
             s->bitmap = std::make_unique<BitmapSubtitleDecoder>(d->codec, d->has_palette ? d->palette : nullptr,
                                                                 static_cast<int>(d->canvas_width),
@@ -581,7 +585,9 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
         const int64_t t = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
         if (t == WNK_BRIDGE_NO_TIME) return 0;
         std::vector<std::shared_ptr<const media::SubtitleCue>> cues;
-        if (s->bitmap) {
+        if (s->teletext) {
+            cues = s->teletext->decode(data, size, s->es_id, t - self->base_us_);
+        } else if (s->bitmap) {
             if (self->video_ != nullptr)
                 s->bitmap->set_video_size(static_cast<int>(self->video_->width), static_cast<int>(self->video_->height));
             cues = s->bitmap->decode(data, size, s->es_id, t - self->base_us_);

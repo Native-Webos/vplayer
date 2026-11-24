@@ -9,7 +9,7 @@
 //
 // Subtitles: libVLC delivers the selected subtitle stream through the bridge; text, PGS, DVD and
 // DVB subtitles become cues in the controller's store, which the player screen draws over the
-// picture (subtitle_cues). Teletext and closed captions are listed but not shown yet.
+// picture (subtitle_cues), teletext too (teletext.hpp). Closed captions are listed but not shown yet.
 //
 // Not yet on this path: video filters and the equalizer (the TV decodes; VLC never sees
 // the pictures or the samples).

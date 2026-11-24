@@ -160,7 +160,9 @@ media::SubtitleKind subtitle_kind(uint32_t f) {
         case kSubt:
         case kSsa:
         case kTx3g:
-        case kWebVtt: return media::SubtitleKind::Text;
+        case kWebVtt:
+        case fourcc('t', 'e', 'l', 'x'):  // teletext (teletext.hpp)
+            return media::SubtitleKind::Text;
         case fourcc('b', 'd', 'p', 'g'):  // Blu-ray PGS
         case fourcc('s', 'p', 'u', ' '):  // DVD
         case fourcc('d', 'v', 'b', 's'):  // DVB
