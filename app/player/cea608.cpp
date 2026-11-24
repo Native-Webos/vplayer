@@ -173,8 +173,9 @@ Cea608Decoder::Cue Cea608Decoder::cue(int64_t pts_us) const {
 std::vector<Cea608Decoder::Cue> Cea608Decoder::feed(uint8_t b1, uint8_t b2, int64_t pts_us) {
     std::vector<Cue> out;
     const uint8_t c1 = b1 & 0x7F, c2 = b2 & 0x7F;  // odd parity in bit 7
-    if (c1 == 0 && c2 == 0) return out;            // padding
-    if (c1 >= 0x10 && c1 <= 0x1F) {
+    if (c1 == 0 && c2 == 0) {
+        // Padding: nothing new, but text painted within the last 300 ms still has to show.
+    } else if (c1 >= 0x10 && c1 <= 0x1F) {
         // A control code; sent twice in a row, the copy is skipped.
         if (last_control_ == CcPair{c1, c2}) {
             last_control_ = {0, 0};

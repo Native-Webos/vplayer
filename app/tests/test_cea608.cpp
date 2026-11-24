@@ -69,6 +69,17 @@ TEST("roll_up") {
     CHECK_EQ(f.cues.back()->text, std::string("FIRST\nSECOND"));
 }
 
+TEST("roll_up_then_padding") {
+    // Text painted quickly, then only padding: it shows once the 300 ms are up.
+    Feeder f;
+    f.control(0x14, 0x25);
+    f.control(0x14, 0x70);
+    f.text("LIVE");
+    for (int i = 0; i < 15; ++i) f.pair(0, 0);
+    REQUIRE(!f.cues.empty());
+    CHECK_EQ(f.cues.back()->text, std::string("LIVE"));
+}
+
 TEST("characters") {
     Feeder f;
     f.control(0x14, 0x29);  // paint-on
