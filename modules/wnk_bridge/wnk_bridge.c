@@ -147,6 +147,8 @@ static sout_stream_id_sys_t *Add(sout_stream_t *p_stream, const es_format_t *p_f
         d.encoding = p_fmt->subs.psz_encoding;
         d.canvas_width = p_fmt->subs.spu.i_original_frame_width > 0 ? (unsigned)p_fmt->subs.spu.i_original_frame_width : 0;
         d.canvas_height = p_fmt->subs.spu.i_original_frame_height > 0 ? (unsigned)p_fmt->subs.spu.i_original_frame_height : 0;
+        d.teletext_magazine = p_fmt->i_codec == VLC_CODEC_TELETEXT ? p_fmt->subs.teletext.i_magazine : -1;
+        d.teletext_page = p_fmt->i_codec == VLC_CODEC_TELETEXT ? p_fmt->subs.teletext.i_page : 0;
         if (p_fmt->subs.spu.palette[0] == SPU_PALETTE_DEFINED) {
             d.has_palette = 1;
             memcpy(d.palette, &p_fmt->subs.spu.palette[1], sizeof d.palette);
