@@ -182,15 +182,28 @@ Tile::Tile(const TileSpec &spec) : Column(12), title_(spec.title), subtitle_(spe
     thumb_ = &thumb;
     thumb.set_height(Dim::fixed(metric::tile_thumb_h));
     thumb.set_background(spec.tint, 22);
-    thumb.set_padding(Insets::all(12));
-    if (!spec.icon_url.empty()) {
-        auto &img = thumb.add<ImageView>(spec.icon_url);
-        img.set_fit(ImageFit::Contain);
-        img.set_size(64, 64);
-        img.set_align(Align::Center, Align::Center);
+    View *chips = &thumb;
+    if (!spec.image_url.empty()) {
+        // The picture fills the thumbnail; the badges sit on it, inset by an overlay's padding.
+        auto &img = thumb.add<ImageView>(spec.image_url);
+        img.set_fit(ImageFit::Cover);
+        img.set_width(Dim::fill());
+        img.set_height(Dim::fill());
+        chips = &thumb.add<View>();
+        chips->set_width(Dim::fill());
+        chips->set_height(Dim::fill());
+        chips->set_padding(Insets::all(12));
+    } else {
+        thumb.set_padding(Insets::all(12));
+        if (!spec.icon_url.empty()) {
+            auto &img = thumb.add<ImageView>(spec.icon_url);
+            img.set_fit(ImageFit::Contain);
+            img.set_size(64, 64);
+            img.set_align(Align::Center, Align::Center);
+        }
     }
-    if (!spec.badge.empty()) thumb.add<Chip>(spec.badge).set_align(Align::Start, Align::Start);
-    if (!spec.corner.empty()) thumb.add<Chip>(spec.corner).set_align(Align::End, Align::End);
+    if (!spec.badge.empty()) chips->add<Chip>(spec.badge).set_align(Align::Start, Align::Start);
+    if (!spec.corner.empty()) chips->add<Chip>(spec.corner).set_align(Align::End, Align::End);
 
     auto &text = add<Column>(4);
     auto &t = text.add<Label>(spec.title);

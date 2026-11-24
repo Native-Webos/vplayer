@@ -94,6 +94,7 @@ struct TileSpec {
     std::string title;
     std::string subtitle;
     std::string icon_url;      // centred in the thumbnail; empty for none
+    std::string image_url;     // fills the thumbnail (a video frame, an album cover); replaces the icon
     Color tint = col::surface;
     std::string badge;         // top left, e.g. "MKV"
     std::string corner;        // bottom right, e.g. "4.2 GB"

@@ -116,7 +116,7 @@ void MusicPage::show_albums(Ui &ui, size_t focus) {
         t.title = a.title;
         t.subtitle = (a.artist.empty() ? std::string() : a.artist + " · ") + std::to_string(a.tracks.size()) +
                      (a.tracks.size() == 1 ? " track" : " tracks");
-        t.icon_url = a.cover.empty() ? ui::icon("music") : file_url(a.cover);
+        if (a.cover.empty()) t.icon_url = ui::icon("music"); else t.image_url = file_url(a.cover);
         t.tint = ui::tint_for(a.folder);
         return std::make_unique<Tile>(t);
     });
@@ -148,7 +148,7 @@ void MusicPage::show_album(Ui &ui, size_t index) {
         TileSpec t;
         t.title = display_name(tr.name);
         t.subtitle = extension_upper(tr.name) + " · " + format_bytes(tr.size);
-        t.icon_url = al.cover.empty() ? ui::icon("music") : file_url(al.cover);
+        if (al.cover.empty()) t.icon_url = ui::icon("music"); else t.image_url = file_url(al.cover);
         t.tint = ui::tint_for(al.folder);
         return std::make_unique<Tile>(t);
     });
