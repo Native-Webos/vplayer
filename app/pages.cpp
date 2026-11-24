@@ -144,13 +144,20 @@ HomePage::HomePage(Services &services) : s_(services) {
     net.name = "home.network";
     auto &stream = side.add<HeroCard>(ui::icon("link"), "STREAM", "Open a stream", "HTTP, HLS, RTSP and IPTV lists",
                                       ui::Color::hex(0x2F4538FF),
-                                      [](Ui &ui) { ui.toast("Opening a stream URL is coming soon."); }, 30);
+                                      [this](Ui &) { s_.open_stream(); }, 30);
     stream.set_height(Dim::fill());
     stream.name = "home.stream";
 
     auto &header = col.add<Row>(16);
     header.set_align(Align::Stretch, Align::Start);
-    section_title(header, "Recently added").set_align(Align::Start, Align::End);
+    rail_tabs_ = &header.add<ui::PillTabs>(std::vector<std::string>{"Continue watching", "Recently added"},
+                                           [this](Ui &u, int i) {
+                                               rail_mode_ = i;
+                                               show_rail(u);
+                                           });
+    rail_tabs_->set_selected(1);
+    rail_tabs_->tab(0).set_visible(false);  // until something can be continued
+    rail_tabs_->set_align(Align::Start, Align::End);
     recent_source_ = &header.add<Label>("");
     recent_source_->set_font_size(20);
     recent_source_->set_muted(true);
@@ -162,6 +169,16 @@ HomePage::HomePage(Services &services) : s_(services) {
     rail_->set_content_padding(Insets{12, 20, 12, 12});
     rail_->name = "home.recent";
     rail_->on_activate = [this](Ui &, size_t i) {
+        if (rail_mode_ == 0) {
+            if (i >= continue_.size()) return;
+            platform::FileEntry e;
+            e.name = continue_[i].name;
+            e.path = continue_[i].path;
+            e.kind = platform::file_kind(e.name) == platform::FileKind::Audio ? platform::FileKind::Audio
+                                                                              : platform::FileKind::Video;
+            s_.play(e);
+            return;
+        }
         if (i < recent_.size()) s_.play(recent_[i]);
     };
     recent_empty_ = &rail_box.add<Label>("");
@@ -173,6 +190,22 @@ HomePage::HomePage(Services &services) : s_(services) {
 
 void HomePage::update(Ui &ui, float dt) {
     Page::update(ui, dt);
+    // Resume points changed (a file was played): the "Continue watching" list follows.
+    if (s_.history != nullptr && s_.history->loaded() && s_.history->generation() != history_gen_) {
+        history_gen_ = s_.history->generation();
+        continue_ = s_.history->continue_list(20);
+        rail_tabs_->tab(0).set_visible(!continue_.empty());
+        if (!continue_.empty() && !continue_shown_) {  // once: do not move the rail under the viewer later
+            continue_shown_ = true;
+            rail_mode_ = 0;
+            rail_tabs_->set_selected(0);
+        }
+        if (continue_.empty() && rail_mode_ == 0) {
+            rail_mode_ = 1;
+            rail_tabs_->set_selected(1);
+        }
+        show_rail(ui);
+    }
     poll_ += dt;
     if (first_ || poll_ >= kPollSeconds) {
         refresh_volumes(ui, first_);
@@ -207,8 +240,31 @@ void HomePage::refresh_volumes(Ui &ui, bool force) {
         [this](std::vector<platform::FileEntry> files) { show_recent(s_.ctx->ui(), std::move(files)); });
 }
 
-void HomePage::show_recent(Ui &, std::vector<platform::FileEntry> files) {
+void HomePage::show_recent(Ui &ui, std::vector<platform::FileEntry> files) {
     recent_ = std::move(files);
+    recent_loaded_ = true;
+    show_rail(ui);
+    WNK_LOGI(kCat, "home ready: %zu drives, %zu recent videos", volumes_.size(), recent_.size());
+}
+
+void HomePage::show_rail(Ui &) {
+    if (rail_mode_ == 0) {
+        rail_->set_items(continue_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
+            const auto &h = continue_[i];
+            TileSpec t;
+            t.title = display_name(h.name);
+            t.icon_url = ui::icon(platform::file_kind(h.name) == platform::FileKind::Audio ? "music" : "film");
+            t.tint = ui::tint_for(h.name);
+            t.badge = extension_upper(h.name);
+            const bool remote = h.path.find("://") != std::string::npos;
+            t.subtitle = "From " + clock_text(h.position_ms) + (remote ? " · network" : "");
+            if (h.length_ms > h.position_ms) t.corner = std::to_string((h.length_ms - h.position_ms + 59'999) / 60'000) + " min left";
+            return std::make_unique<Tile>(t);
+        });
+        recent_source_->set_text("Where you stopped");
+        recent_empty_->set_visible(false);
+        return;
+    }
     rail_->set_items(recent_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
         const auto &e = recent_[i];
         TileSpec t = entry_tile(e);
@@ -216,12 +272,11 @@ void HomePage::show_recent(Ui &, std::vector<platform::FileEntry> files) {
         return std::make_unique<Tile>(t);
     });
     recent_source_->set_text(recent_.empty() ? "" : "Newest videos on your drives");
-    recent_empty_->set_visible(recent_.empty());
+    recent_empty_->set_visible(recent_.empty() && recent_loaded_);
     if (recent_.empty()) {
         recent_empty_->set_text(volumes_.empty() ? "Plug in a USB drive to see its newest videos here."
                                                  : "No videos found on the connected drives.");
     }
-    WNK_LOGI(kCat, "home ready: %zu drives, %zu recent videos", volumes_.size(), recent_.size());
 }
 
 // ==== BrowsePage =====================================================================================

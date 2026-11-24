@@ -161,6 +161,10 @@ class App : public wnk::app::Delegate {
 
         services_.ctx = &ctx;
         services_.history = &history_;
+        services_.open_stream = [this, &ctx] {
+            main_->go(ctx.ui(), Tab::Network);
+            main_->network().open_url_dialog(ctx.ui());
+        };
         services_.show_tab = [this, &ctx](Tab t) { main_->go(ctx.ui(), t); };
         services_.browse_to = [this, &ctx](const std::string &folder) { main_->browse_to(ctx.ui(), folder); };
         services_.play = [this, &ctx](const wnk::platform::FileEntry &e) { play(ctx.ui(), e); };

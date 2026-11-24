@@ -25,6 +25,8 @@ class NetworkPage : public Page {
     bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
     // libVLC became available after the page was made (it starts on a worker).
     void set_vlc(libvlc_instance_t *vlc);
+    // "Open a network stream": an address, played at once and remembered.
+    void open_url_dialog(wnk::ui::Ui &ui) { ask_url(ui); }
 
  private:
     enum class Item : uint8_t { OpenUrl, AddServer, Saved, Found, Recent };

@@ -30,6 +30,7 @@ struct Services {
     // Opens the player on queue[index], with the queue for previous/next (network folders: the
     // entries' paths are libVLC addresses).
     std::function<void(std::vector<wnk::platform::FileEntry> queue, size_t index)> play_queue;
+    std::function<void()> open_stream;  // the Network tab's "Open a network stream" dialog
 };
 
 class Page : public wnk::ui::View {
@@ -47,13 +48,20 @@ class HomePage : public Page {
  private:
     void refresh_volumes(wnk::ui::Ui &ui, bool force);
     void show_recent(wnk::ui::Ui &ui, std::vector<wnk::platform::FileEntry> files);
+    void show_rail(wnk::ui::Ui &ui);  // the selected list: continue watching, or recently added
 
     Services &s_;
     wnk::async::Lifetime lifetime_;
     std::vector<wnk::platform::RemovableVolume> volumes_;
     std::vector<wnk::platform::FileEntry> recent_;
+    std::vector<HistoryEntry> continue_;
+    uint64_t history_gen_ = ~uint64_t{0};
+    int rail_mode_ = 1;           // 0 continue watching, 1 recently added
+    bool continue_shown_ = false;  // switched to "Continue watching" once it had entries
+    bool recent_loaded_ = false;
     float poll_ = 0;
     bool first_ = true;
+    ui::PillTabs *rail_tabs_ = nullptr;
     ui::HeroCard *hero_ = nullptr;
     wnk::ui::Label *recent_source_ = nullptr;
     wnk::ui::Label *recent_empty_ = nullptr;
