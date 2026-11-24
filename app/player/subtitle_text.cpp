@@ -161,6 +161,9 @@ media::SubtitleKind subtitle_kind(uint32_t f) {
         case kSsa:
         case kTx3g:
         case kWebVtt: return media::SubtitleKind::Text;
+        case fourcc('b', 'd', 'p', 'g'):  // Blu-ray PGS
+        case fourcc('s', 'p', 'u', ' '):  // DVD
+            return media::SubtitleKind::Bitmap;  // subtitle_bitmap.hpp
         default: return media::SubtitleKind::None;
     }
 }

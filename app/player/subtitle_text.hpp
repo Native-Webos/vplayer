@@ -25,7 +25,8 @@
 
 namespace vplayer {
 
-// Whether the hardware path can show a subtitle codec (a VLC fourcc), and how.
+// Whether the hardware path can show a subtitle codec (a VLC fourcc), and how (Bitmap: see
+// subtitle_bitmap.hpp).
 wnk::media::SubtitleKind subtitle_kind(uint32_t vlc_fourcc);
 
 // One packet → a cue of `track` from `start_us`, lasting `length_us` (0: until the next cue).
