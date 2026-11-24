@@ -1,0 +1,15 @@
+diff --git a/contrib/src/png/rules.mak b/contrib/src/png/rules.mak
+index a8f3224..5e709f1 100644
+--- a/contrib/src/png/rules.mak
++++ b/contrib/src/png/rules.mak
+@@ -35,6 +35,10 @@ else ifdef HAVE_ANDROID
+ # libpng disallows "check" for ARM here as it would be redundant/"unproductive",
+ # see https://github.com/glennrp/libpng/commit/b8ca9108acddfb9fb5d886f5e8a072ebaf436dbb
+ PNG_CONF += -DPNG_ARM_NEON=on
++else ifeq ($(HOST),arm-webos-linux-gnueabi)
++# webOS: every supported TV SoC has NEON and the toolchain enables it by default, which makes
++# libpng refuse "check" (arm_init.c errors out when __ARM_NEON is defined).
++PNG_CONF += -DPNG_ARM_NEON=on
+ else
+ # Otherwise do runtime detection
+ PNG_CONF += -DPNG_ARM_NEON=check

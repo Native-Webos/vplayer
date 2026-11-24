@@ -1,0 +1,30 @@
+diff --git a/contrib/src/ffmpeg/rules.mak b/contrib/src/ffmpeg/rules.mak
+index e4b5595..cb6ccbe 100644
+--- a/contrib/src/ffmpeg/rules.mak
++++ b/contrib/src/ffmpeg/rules.mak
+@@ -171,6 +171,10 @@ endif
+ # Linux
+ ifdef HAVE_LINUX
+ FFMPEGCONF += --target-os=linux --enable-pic
++ifeq ($(HOST),arm-webos-linux-gnueabi)
++# webOS sysroot is glibc 2.12, whose <assert.h> predates the C11 static_assert macro (glibc 2.16).
++FFMPEGCONF += --extra-cflags=-Dstatic_assert=_Static_assert
++endif
+ 
+ endif
+ 
+diff --git a/contrib/src/postproc/rules.mak b/contrib/src/postproc/rules.mak
+index 4779353..41f4270 100644
+--- a/contrib/src/postproc/rules.mak
++++ b/contrib/src/postproc/rules.mak
+@@ -107,6 +107,10 @@ endif
+ # Linux
+ ifdef HAVE_LINUX
+ POSTPROC_CONF += --target-os=linux --enable-pic
++ifeq ($(HOST),arm-webos-linux-gnueabi)
++# webOS sysroot is glibc 2.12, whose <assert.h> predates the C11 static_assert macro (glibc 2.16).
++POSTPROC_CONF += --extra-cflags=-Dstatic_assert=_Static_assert
++endif
+ 
+ endif
+ 
