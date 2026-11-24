@@ -11,7 +11,7 @@
 // subtitles become cues in the controller's store, which the player screen draws over the picture
 // (subtitle_cues). Other bitmap formats (DVB, teletext) are listed but not shown yet.
 //
-// Not yet on this path: chapters, video filters and the equalizer (the TV decodes; VLC never sees
+// Not yet on this path: video filters and the equalizer (the TV decodes; VLC never sees
 // the pictures or the samples).
 #pragma once
 

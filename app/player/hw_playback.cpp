@@ -226,6 +226,34 @@ class HwPlayback final : public Playback {
         if (controller_) controller_->set_speed(r);
     }
 
+    // Chapters as libVLC reads them; choosing one seeks through the controller like any other
+    // seek (to the keyframe at or before its start), the current one follows the picture.
+    std::vector<Chapter> chapters() const override {
+        std::vector<Chapter> out;
+        if (!controller_) return out;
+        for (const auto &c : source_->chapters()) out.push_back({c.name, c.start_ms});
+        return out;
+    }
+    int chapter() const override {
+        const auto list = chapters();
+        const int64_t t = time_ms();
+        // A chosen chapter is current from the keyframe before its start, where the seek lands.
+        if (chosen_ >= 0 && chosen_ < static_cast<int>(list.size())) {
+            const int64_t start = list[static_cast<size_t>(chosen_)].start_ms;
+            if (t < start && t >= start - 15'000) return chosen_;
+        }
+        int current = -1;
+        for (size_t i = 0; i < list.size(); ++i)
+            if (list[i].start_ms <= t) current = static_cast<int>(i);
+        return current;
+    }
+    void set_chapter(int c) override {
+        const auto list = chapters();
+        if (c < 0 || c >= static_cast<int>(list.size())) return;
+        chosen_ = c;
+        seek_ms(list[static_cast<size_t>(c)].start_ms);
+    }
+
     std::vector<std::pair<std::string, std::string>> info() const override {
         std::vector<std::pair<std::string, std::string>> rows;
         if (!controller_) return rows;
@@ -271,6 +299,7 @@ class HwPlayback final : public Playback {
     VlcSource *source_ = nullptr;
     std::chrono::steady_clock::time_point next_sync_{};
     int64_t subtitle_delay_us_ = 0;
+    int chosen_ = -1;  // the chapter last chosen (set_chapter)
     std::string backend_name_, error_;
     bool paused_ = false;
     bool played_ = false;  // set on the main thread by the state callback
