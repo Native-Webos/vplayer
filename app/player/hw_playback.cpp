@@ -218,6 +218,9 @@ class HwPlayback final : public Playback {
         return out;
     }
     int video_track() const override { return controller_ ? controller_->snapshot().video_track : -1; }
+    // The kit's controller needs the source to time-stretch audio for other speeds; VlcSource does
+    // not yet (it would take a tempo filter in VLC's #transcode chain).
+    bool can_change_rate() const override { return false; }
     float rate() const override { return controller_ ? static_cast<float>(controller_->snapshot().speed) : 1; }
     void set_rate(float r) override {
         if (controller_) controller_->set_speed(r);

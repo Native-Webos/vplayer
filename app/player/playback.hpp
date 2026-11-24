@@ -136,6 +136,8 @@ class Playback {
     virtual void set_audio_delay_ms(int64_t) {}
     virtual void set_subtitle_delay_ms(int64_t) {}
     virtual float rate() const { return 1; }
+    // False where set_rate does nothing (the TV decoder path, until its audio can be stretched).
+    virtual bool can_change_rate() const { return true; }
     virtual void set_rate(float) {}
     virtual std::vector<Chapter> chapters() const { return {}; }
     virtual int chapter() const { return -1; }
