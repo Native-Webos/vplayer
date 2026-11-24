@@ -17,9 +17,29 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp)
+add_executable(vplayer main.cpp vlc_engine.cpp)
 target_link_libraries(vplayer PRIVATE wnk_app)
 target_include_directories(vplayer SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")  # nlohmann/json.hpp
+
+# libVLC, cross-built by ../libvlc/build.sh: headers in its stage, the stripped runtime (libvlc,
+# libvlccore, plugins, lua) laid out as it goes into the package. The host build has no libVLC yet
+# and compiles VlcEngine as a stub.
+set(VPLAYER_LIBVLC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/libvlc" CACHE PATH "libVLC build output (libvlc/build.sh)")
+set(_vlc_runtime "${VPLAYER_LIBVLC_DIR}/runtime")
+set(_vlc_include "${VPLAYER_LIBVLC_DIR}/stage/usr/include")
+set(VPLAYER_LIBVLC_PACKAGE_DIRS)
+if (WNK_WEBOS AND EXISTS "${_vlc_runtime}/lib/libvlc.so.5" AND EXISTS "${_vlc_include}/vlc/vlc.h")
+    message(STATUS "vplayer: libVLC from ${VPLAYER_LIBVLC_DIR}")
+    target_compile_definitions(vplayer PRIVATE VPLAYER_HAVE_LIBVLC=1)
+    target_include_directories(vplayer SYSTEM PRIVATE "${_vlc_include}")
+    target_link_libraries(vplayer PRIVATE "${_vlc_runtime}/lib/libvlc.so.5")
+    target_link_options(vplayer PRIVATE "LINKER:-rpath-link,${_vlc_runtime}/lib")  # libvlccore.so.9
+    # lib/ (libvlc.so.5, libvlccore.so.9, vlc/plugins, vlc/lua) and share/ (vlc/lua) are merged into
+    # the package's own lib/ and share/.
+    set(VPLAYER_LIBVLC_PACKAGE_DIRS "${_vlc_runtime}/lib" "${_vlc_runtime}/share")
+elseif (WNK_WEBOS)
+    message(WARNING "vplayer: no libVLC at ${VPLAYER_LIBVLC_DIR} (run ../libvlc/build.sh); building without it")
+endif ()
 
 # Fonts (Atkinson Hyperlegible, OFL) live in fonts/ next to the executable, on the host and in the ipk.
 add_custom_command(TARGET vplayer POST_BUILD
@@ -36,8 +56,8 @@ wnk_add_webos_package(
         LARGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/largeIcon.png"
         ICON_COLOR "#e85d04"
         EXPECTED_NEEDED "${CMAKE_CURRENT_SOURCE_DIR}/expected-needed.txt"
-        EXTRA_DIRS "${WNK_FONT_DIR}")
+        EXTRA_DIRS "${WNK_FONT_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
 
-# Host smoke test: OK on the focused button, then Back twice at the root quits.
+# Host smoke test: the engine reports (a stub on the host), then Back twice at the root quits.
 wnk_add_app_test(NAME e2e.vplayer.starts_and_quits TARGET vplayer PREFIX APP_VPLAYER
-        KEYS "Return,Escape,Escape" PASS "hello pressed 1")
+        KEYS "Escape,Escape" PASS "has no libVLC")

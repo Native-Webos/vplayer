@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// VPlayer: made with the kit's tools/new-app.py. The kit's docs/AGENT-APP-GUIDE.md maps features
-// onto its API (lists and grids, HTTP, storage, playback); its applications/examples/ shows each of
-// them in a working app.
+// VPlayer: libVLC on LG webOS, on the webos-native-app-kit app shell.
+// Design: ../docs/RESEARCH.md. Plan: ../docs/ROADMAP.md.
+//
+// Today this screen proves the libVLC runtime inside the package: it starts libVLC on a worker and
+// shows its version, how long the plugin scan took, and which audio outputs could be loaded.
+#include "vlc_engine.hpp"
+
 #include "wnk/app/app.hpp"
+#include "wnk/async/async.hpp"
 #include "wnk/log.hpp"
 #include "wnk/ui/navigation.hpp"
 #include "wnk/ui/widgets.hpp"
@@ -15,25 +20,46 @@ namespace {
 
 constexpr const char *kCat = "vplayer";
 
+struct EngineResult {
+    std::shared_ptr<vplayer::VlcEngine> engine;
+    vplayer::VlcInfo info;
+};
+
+std::string join(const std::vector<std::string> &v) {
+    std::string out;
+    for (const auto &s : v) out += (out.empty() ? "" : ", ") + s;
+    return out.empty() ? "none" : out;
+}
+
 class HomeScreen : public wnk::ui::Screen {
  public:
     HomeScreen() : Screen("home") {
-        auto &col = add<wnk::ui::Column>(32);
+        auto &col = add<wnk::ui::Column>(28);
         col.set_padding(wnk::ui::Insets::all(96));
         col.add<wnk::ui::Label>("VPlayer", wnk::ui::TextRole::Title);
-        auto &status = col.add<wnk::ui::Label>("Press OK on a button. Back twice quits.");
-        status.set_muted(true);
+        status_ = &col.add<wnk::ui::Label>("Starting libVLC…");
+        details_ = &col.add<wnk::ui::Label>("");
+        details_->set_muted(true);
         auto &buttons = col.add<wnk::ui::Row>(24);
-        buttons.add<wnk::ui::Button>("Say hello", [this, &status](wnk::ui::Ui &) {
-            ++presses_;
-            WNK_LOGI(kCat, "hello pressed %d", presses_);
-            status.set_text("Hello from the TV! Pressed " + std::to_string(presses_) + (presses_ == 1 ? " time." : " times."));
+        buttons.add<wnk::ui::Button>("About", [](wnk::ui::Ui &ui) {
+            ui.toast("VPlayer is powered by libVLC (LGPL). Not affiliated with VideoLAN.");
         });
-        buttons.add<wnk::ui::Button>("Show a toast", [](wnk::ui::Ui &ui) { ui.toast("A toast from VPlayer"); });
+    }
+
+    void show_engine(const vplayer::VlcInfo &info) {
+        if (info.available) {
+            status_->set_text("libVLC " + info.version + " is running.");
+            details_->set_text("Started in " + std::to_string(info.init_time.count()) + " ms. Audio outputs: " +
+                               join(info.audio_outputs) + ". Built with " + info.compiler + ".");
+        } else {
+            status_->set_text("libVLC is not available.");
+            details_->set_text(info.error);
+        }
     }
 
  private:
-    int presses_ = 0;
+    wnk::ui::Label *status_ = nullptr;
+    wnk::ui::Label *details_ = nullptr;
 };
 
 class App : public wnk::app::Delegate {
@@ -41,12 +67,37 @@ class App : public wnk::app::Delegate {
     void on_start(wnk::app::Context &ctx) override {
         auto &ui = ctx.ui();
         nav_ = &ui.root().add<wnk::ui::Navigator>();
-        nav_->push(ui, std::make_unique<HomeScreen>());
+        auto home = std::make_unique<HomeScreen>();
+        home_ = home.get();
+        nav_->push(ui, std::move(home));
+
+        const std::string app_dir = ctx.launch().app_dir;
+        wnk::async::run_then_post<EngineResult>(
+            ctx.pool(), ctx.dispatcher(), lifetime_.weak(), cancel_.token(),
+            [app_dir](const wnk::async::CancellationToken &) {
+                EngineResult r;
+                r.engine = vplayer::VlcEngine::create(app_dir, r.info);
+                return r;
+            },
+            [this](EngineResult r) {
+                engine_ = std::move(r.engine);
+                if (home_) home_->show_engine(r.info);
+            });
         WNK_LOGI(kCat, "started");
     }
 
+    void on_stop(wnk::app::Context &) override {
+        cancel_.cancel();
+        home_ = nullptr;
+        engine_.reset();
+    }
+
  private:
+    wnk::async::Lifetime lifetime_;
+    wnk::async::CancellationSource cancel_;
     wnk::ui::Navigator *nav_ = nullptr;
+    HomeScreen *home_ = nullptr;
+    std::shared_ptr<vplayer::VlcEngine> engine_;
 };
 
 }  // namespace
