@@ -74,7 +74,7 @@ release and date.
       choice and delay; within a frame of the picture. On the TV 2026-11-24
 - [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
 - [x] DVB subtitles on the hardware path (host-tested)
-- [ ] Teletext subtitles on the hardware path
+- [x] Teletext subtitles on the hardware path (host-tested; ASCII only, no national sets)
 - [x] SubRip `{\an8}` (top) placement and tag styling on the hardware path (libass; host-tested)
 - [x] Aspect ratio and zoom on the hardware path (the picture's rectangle on the video plane; host-tested)
 - [x] Speed on the hardware path: VLC decodes audio to PCM, the app time-stretches it (RESEARCH.md §15)
@@ -94,7 +94,7 @@ release and date.
 - [x] Playlists tab: M3U/M3U8 (IPTV groups and logos), PLS, XSPF, local and by address. Host-tested only
 - [x] Music tab: albums from folders with covers, shuffle; cover in the player. Host-tested only
 - [ ] The TV run of docs/TV-TEST-PLAN.md
-- [ ] Media library: posters/thumbnails (`libvlc_media_thumbnail` or snapshots)
+- [x] Video thumbnails (the app's own libVLC thumbnailer; host-tested only for its files, the grab needs the TV)
 
 ## P4: player feature parity
 - [x] Player bar: previous/next file in the folder (queue = the folder's videos/audio/disc images),
@@ -111,7 +111,9 @@ release and date.
 - [x] Remote interaction on the TV (pause, seek, panels) with app/tools/tv-keys.sh (RESEARCH.md §13)
 - [x] Disc titles (software path), discs start at the main film; jump to time; bookmarks; subtitle
       size and background (Settings); search. Host-tested
-- [ ] Teletext pages, subtitle colour, audio passthrough choice, snapshot
+- [x] Subtitle colour, audio to the TV (decoded PCM option), audio delay on the hardware path,
+      snapshots (software path), your own playlists, video thumbnails. Host-tested
+- [ ] Teletext pages (not subtitles) as a viewer
 - [ ] DVD/Blu-ray ISO and folders with menus (software path)
 - [ ] Video: aspect, crop, zoom, deinterlace, adjust; audio: equalizer, normalize, stereo mode
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)

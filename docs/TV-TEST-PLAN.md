@@ -109,6 +109,13 @@ how to test it, what should happen, and what the log shows.
 | 7b.5 | Playback → Add a bookmark here, twice at different places; restart the app | Both bookmarks listed and jump there |
 | 7b.6 | A DVD ISO and a Blu-ray ISO | Start at the main film, not the menu; Playback → Titles lists the rest (software path) |
 | 7b.7 | Top bar → search, type part of a file name with the remote's keyboard | Results as you type; one plays |
+| 7b.8 | Audio delay +0.5 s on the TV decoder (two-audio.mkv) | Audio comes later after a second or two; no stall | 
+| 7b.9 | Settings → Audio to the TV: Always decoded, play thd-20s.mkv | Info: "To the TV … pcm"; plays |
+| 7b.10 | Settings → Subtitle colour Yellow; SRT on both decoders | Yellow text |
+| 7b.11 | Software decoder → Video → Take a snapshot | "Snapshot saved…" and a PNG in "VPlayer snapshots" on the drive (can the app write to USB?) |
+| 7b.12 | Playback → Add to a playlist → New playlist; Playlists tab | The list with the file; plays; Red removes an entry / the list |
+| 7b.13 | Browse a folder of videos, Home "Recently added" | Thumbnails appear one by one (log `[thumbs] … in N ms`); none made while a video plays |
+| 7b.14 | A DVB recording with teletext subtitles (e.g. page 888) on the TV decoder | Subtitles show and clear; accented letters may be wrong (no national sets yet) |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
 
