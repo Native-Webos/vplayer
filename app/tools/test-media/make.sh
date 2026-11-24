@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Makes the test media used on the TV (docs/TV-TEST-PLAN.md) into OUT_DIR, on the desktop:
 #   tools/test-media/make.sh OUT_DIR
-# Needs ffmpeg (with libx264, libx265), python3 with Pillow and the DejaVu fonts; the Dolby Vision
+# Needs ffmpeg (with libx264, libx265, libmp3lame), python3 with Pillow and the DejaVu fonts; the Dolby Vision
 # file also needs cargo and the dolby_vision crate in the local cargo registry (skipped otherwise).
 # Copy OUT_DIR to the USB drive (e.g. as wnk-test/subs) with ares-push or by hand.
 set -euo pipefail
@@ -84,6 +84,35 @@ ffmpeg "${q[@]}" -i two-audio.mkv -i chapters.txt -map 0 -map_metadata 1 -map_ch
 ffmpeg "${q[@]}" -f lavfi -i testsrc2=size=1280x720:rate=30 -t 30 -c:v libx264 -preset veryfast -pix_fmt yuvj420p \
     -color_range pc full-range.mp4
 
+# Teletext subtitles (page 888, German characters) in a TS: FFmpeg cannot encode teletext.
+ffmpeg "${q[@]}" -f lavfi -i testsrc2=size=1280x720:rate=25 -f lavfi -i sine=frequency=440:sample_rate=48000 \
+    -t 25 -c:v libx264 -preset veryfast -g 50 -pix_fmt yuv420p -c:a mp2 plain-tt.ts
+python3 -I "$here/add_teletext.py" plain-tt.ts teletext.ts
+
+# Closed captions (CEA-608 in H.264 SEI, as US recordings carry them): FFmpeg cannot write them.
+ffmpeg "${q[@]}" -f lavfi -i testsrc2=size=1280x720:rate=25 -t 30 -c:v libx264 -preset veryfast -bf 0 -g 50 \
+    -pix_fmt yuv420p -x264-params aud=1 -f h264 plain-cc.h264
+python3 -I "$here/inject_cc.py" plain-cc.h264 25 cc.h264
+ffmpeg "${q[@]}" -r 25 -i cc.h264 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 30 -map 0 -map 1 -c:v copy \
+    -c:a aac captions.mkv
+
+# Music laid out Artist/Album: tagged MP3s whose file names are not in track order, a cover; and
+# untagged FLACs by a second artist (the Artists view needs two).
+album="Music/Test Artist/Tagged Album"
+mkdir -p "$album" "Music/Other Artist/Untagged"
+tag=("c.mp3:Track One:1:330" "a.mp3:Track Two:2:440" "b.mp3:Track Three:3:550")
+for t in "${tag[@]}"; do
+    IFS=: read -r name title n hz <<<"$t"
+    ffmpeg "${q[@]}" -f lavfi -i sine=frequency=$hz:sample_rate=44100 -t 20 -c:a libmp3lame -b:a 128k \
+        -metadata title="$title" -metadata artist="Test Artist" -metadata album="Tagged Album" -metadata track="$n/3" \
+        "$album/$name"
+done
+ffmpeg "${q[@]}" -f lavfi -i testsrc2=size=600x600 -frames:v 1 "$album/cover.jpg"
+for n in 1 2; do
+    ffmpeg "${q[@]}" -f lavfi -i sine=frequency=$((300 * n)):sample_rate=44100 -t 15 -map_metadata -1 -c:a flac \
+        "Music/Other Artist/Untagged/0$n part $n.flac"
+done
+
 # Playlists.
 printf '#EXTM3U\n#EXTINF:-1 group-title="Local",Two audio tracks\ntwo-audio.mkv\n#EXTINF:-1 group-title="Local",Chapters\nchapters.mkv\n' > local.m3u
 printf '[playlist]\nFile1=sync.mkv\nTitle1=Sync check\nFile2=side car.mp4\n' > local.pls
@@ -100,5 +129,5 @@ if command -v cargo >/dev/null && cargo build --offline --release --manifest-pat
 else
     echo "dv81.mkv skipped (cargo or the dolby_vision crate not available offline)"
 fi
-rm -f en.srt sync.srt styled.ass fr.vtt labels.sup chapters.txt
-ls -la
+rm -f en.srt sync.srt styled.ass fr.vtt labels.sup chapters.txt plain-tt.ts plain-cc.h264 cc.h264
+ls -la; ls -R Music
