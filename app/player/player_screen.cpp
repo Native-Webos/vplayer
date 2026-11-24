@@ -356,11 +356,16 @@ class PlayerPanel : public View {
         delay.set_description("Positive when the sound comes too early");
         std::vector<std::string> eq{"Off"};
         for (auto &n : p.equalizer_presets()) eq.push_back(n);
+        const bool custom_ok = eq.size() == static_cast<size_t>(AudioEffects::kCustomEqualizer) + 1;  // VLC 3's 18
+        if (custom_ok) eq.push_back("Custom");
         section("EFFECTS");
         rows_->add<Choice>("Equalizer", eq, st.equalizer + 1, [this](Ui &ui, int i) {
             screen_.settings().equalizer = i - 1;
             screen_.apply_effects(ui);
+            refresh(ui);  // "Adjust the bands" comes and goes with Custom
         });
+        if (custom_ok && st.equalizer == AudioEffects::kCustomEqualizer)
+            rows_->add<ValueRow>("Adjust the bands", "10 bands and preamp", [this](Ui &ui) { adjust_bands(ui); });
         rows_->add<Choice>("Volume boost", kVolumeNames, (st.volume - 100) / 25, [this](Ui &ui, int i) {
             screen_.settings().volume = 100 + i * 25;
             screen_.apply_effects(ui);
@@ -460,6 +465,37 @@ class PlayerPanel : public View {
         d->add_button("Cancel");
         ui.show_dialog(std::move(d));
         ui.focus(&field);
+    }
+
+    // The custom equalizer: a slider per band (and the preamp), applied as they move.
+    void adjust_bands(Ui &ui) {
+        static const char *const names[] = {"Preamp", "60 Hz", "170 Hz", "310 Hz", "600 Hz", "1 kHz",
+                                            "3 kHz",  "6 kHz", "12 kHz", "14 kHz", "16 kHz"};
+        auto d = std::make_unique<Dialog>("Equalizer bands", "Each from -20 to +20 dB.");
+        auto &bands = screen_.settings().eq_bands;
+        // Eleven sliders are taller than the screen: they scroll, following the focus.
+        auto &scroll = d->body().add<ScrollView>();
+        scroll.set_height(Dim::fixed(420));
+        scroll.set_width(Dim::fill());
+        auto &list = scroll.add<Column>(8);
+        list.set_width(Dim::fill());
+        for (size_t b = 0; b < bands.size(); ++b) {
+            auto &s = list.add<Slider>(names[b], -20.0f, 20.0f, 1.0f, bands[b], [this, b](Ui &u, float v) {
+                screen_.settings().eq_bands[b] = v;
+                screen_.apply_effects(u);
+            });
+            s.set_format([](float v) {
+                char buf[16];
+                std::snprintf(buf, sizeof buf, "%+.0f dB", static_cast<double>(v));
+                return std::string(buf);
+            });
+        }
+        d->add_button("Flat", [this](Ui &u) {
+            screen_.settings().eq_bands = {};
+            screen_.apply_effects(u);
+        });
+        d->add_button("Done");
+        ui.show_dialog(std::move(d));
     }
 
     void pick_subtitle_file(Ui &ui) { screen_.offer_subtitle_files(ui); }

@@ -9,8 +9,11 @@
 #include <string>
 
 struct libvlc_media_player_t;
+struct libvlc_equalizer_t;
 
 namespace vplayer {
+
+struct AudioEffects;
 
 // `filters`: VLC audio filter modules, ':' between them ("equalizer:normvol"). False without libVLC.
 bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filters);
@@ -19,5 +22,9 @@ bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filt
 // and the stream output (media options do not reach a sout's filters, whose parent is the player,
 // not the input). Created when the player lacks the variable. Before play.
 bool set_player_option(libvlc_media_player_t *mp, const char *name, float value);
+
+// The equalizer `fx` asks for (a preset, or its own bands), or null when off. The caller releases it
+// (libvlc_audio_equalizer_release).
+libvlc_equalizer_t *make_equalizer(const AudioEffects &fx);
 
 }  // namespace vplayer

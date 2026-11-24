@@ -97,7 +97,7 @@ class VlcPlayback final : public Playback {
         libvlc_video_set_format_callbacks(mp_, &VlcPlayback::setup_cb, &VlcPlayback::cleanup_cb);
         // The audio effects before play: the audio output takes the player's filters when it is made.
         if (effects.volume != 100) libvlc_audio_set_volume(mp_, std::clamp(effects.volume, 0, 200));
-        if (effects.equalizer >= 0) set_equalizer(effects.equalizer);
+        if (effects.equalizer >= 0) apply_equalizer(effects);
         if (effects.normalize || effects.widen) {
             std::string filters = effects.equalizer >= 0 ? "equalizer" : "";
             if (effects.normalize) filters += std::string(filters.empty() ? "" : ":") + "normvol";
@@ -264,25 +264,24 @@ class VlcPlayback final : public Playback {
         return out;
     }
     void set_equalizer(int preset) override {
+        AudioEffects fx;
+        fx.equalizer = preset;
+        apply_equalizer(fx);
+    }
+    void apply_equalizer(const AudioEffects &fx) {
         if (!mp_) return;
-        if (preset < 0) {
-            libvlc_media_player_set_equalizer(mp_, nullptr);
-            return;
-        }
-        libvlc_equalizer_t *eq = libvlc_audio_equalizer_new_from_preset(static_cast<unsigned>(preset));
-        if (eq) {
-            libvlc_media_player_set_equalizer(mp_, eq);  // libVLC copies it
-            libvlc_audio_equalizer_release(eq);
-        }
+        libvlc_equalizer_t *eq = make_equalizer(fx);
+        libvlc_media_player_set_equalizer(mp_, eq);  // libVLC copies it; null: off
+        if (eq) libvlc_audio_equalizer_release(eq);
     }
     // Equalizer and volume change live; normalise and widen are filters chosen at open, and with
     // either on, libVLC's equalizer call would drop them: the equalizer then changes by reopening.
     bool apply_audio_effects(const AudioEffects &fx) override {
         if (fx.normalize != opened_.normalize || fx.widen != opened_.widen) return false;
-        if ((fx.normalize || fx.widen) && fx.equalizer != opened_.equalizer) return false;
+        if ((fx.normalize || fx.widen) && !fx.same_equalizer(opened_)) return false;
         // Only what changed (an unchanged equalizer set again would drop the other filters). The
         // volume always: the audio output may not have existed when it was first set.
-        if (fx.equalizer != opened_.equalizer) set_equalizer(fx.equalizer);
+        if (!fx.same_equalizer(opened_)) apply_equalizer(fx);
         set_volume_percent(fx.volume);
         opened_ = fx;
         return true;

@@ -42,11 +42,20 @@ class PillButton;
 // Settings that stay for the whole player session (they carry over to the next file).
 struct PlayerSettings {
     int64_t audio_delay_ms = 0, subtitle_delay_ms = 0;  // reset per file
-    int equalizer = -1;          // preset index, -1 off
+    int equalizer = -1;          // preset index, AudioEffects::kCustomEqualizer, -1 off
+    std::array<float, 11> eq_bands{};  // the custom equalizer: preamp, then the 10 bands (dB)
     int volume = 100;            // percent, up to 200
     bool normalize = false;      // steadier loudness (VLC's normvol)
     bool widen = false;          // wider stereo (VLC's stereo_widen)
-    AudioEffects effects() const { return {equalizer, volume, normalize, widen}; }
+    AudioEffects effects() const {
+        AudioEffects fx;
+        fx.equalizer = equalizer;
+        fx.bands = eq_bands;
+        fx.volume = volume;
+        fx.normalize = normalize;
+        fx.widen = widen;
+        return fx;
+    }
     AspectMode aspect = AspectMode::Fit;
     int zoom = 100;              // percent
     int deinterlace = 0;         // index into kDeinterlace

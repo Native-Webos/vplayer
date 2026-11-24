@@ -526,7 +526,7 @@ bool VlcSource::start_player(std::string *error) {
     // The equalizer wants bands (VLC 3's filter fails with a preset alone): libVLC's own call sets
     // the player's bands and preamp, as for playback.
     if (mp != nullptr && effects_.equalizer >= 0) {
-        if (libvlc_equalizer_t *eq = libvlc_audio_equalizer_new_from_preset(static_cast<unsigned>(effects_.equalizer))) {
+        if (libvlc_equalizer_t *eq = make_equalizer(effects_)) {
             libvlc_media_player_set_equalizer(mp, eq);
             libvlc_audio_equalizer_release(eq);
         }

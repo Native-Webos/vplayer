@@ -15,6 +15,7 @@
 
 #include "wnk/media/media.hpp"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -91,13 +92,19 @@ struct Title {
 
 // Audio effects (VLC's audio filters). Neutral: no equalizer, 100 %, nothing else.
 struct AudioEffects {
-    int equalizer = -1;      // preset index (libVLC's order: flat, classical, club, ...), -1 off
+    // VLC 3's 18 presets come first; the viewer's own bands after them.
+    static constexpr int kCustomEqualizer = 18;
+    int equalizer = -1;      // preset index (libVLC's order: flat, classical, club, ...), kCustomEqualizer, -1 off
+    std::array<float, 11> bands{};  // kCustomEqualizer: preamp, then 60 Hz ... 16 kHz, in dB (-20..20)
     int volume = 100;        // percent, up to 200
     bool normalize = false;  // VLC's normvol: steadier loudness
     bool widen = false;      // VLC's stereo_widen
     bool active() const { return equalizer >= 0 || volume != 100 || normalize || widen; }
+    bool same_equalizer(const AudioEffects &o) const {
+        return equalizer == o.equalizer && (equalizer != kCustomEqualizer || bands == o.bands);
+    }
     bool operator==(const AudioEffects &o) const {
-        return equalizer == o.equalizer && volume == o.volume && normalize == o.normalize && widen == o.widen;
+        return same_equalizer(o) && volume == o.volume && normalize == o.normalize && widen == o.widen;
     }
     bool operator!=(const AudioEffects &o) const { return !(*this == o); }
 };

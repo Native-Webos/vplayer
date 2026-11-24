@@ -91,8 +91,7 @@ class DemoPlayback final : public Playback {
         if (c >= 0 && c < static_cast<int>(ch.size())) seek_ms(ch[static_cast<size_t>(c)].start_ms);
     }
     std::vector<std::string> equalizer_presets() const override {
-        return {"Flat", "Classical", "Club", "Dance", "Full bass", "Full treble", "Headphones", "Large Hall",
-                "Live", "Party", "Pop", "Reggae", "Rock", "Ska", "Soft", "Soft rock", "Techno"};
+        return equalizer_preset_labels();
     }
     bool can_filter_video() const override { return true; }
     std::vector<std::pair<std::string, std::string>> info() const override {
