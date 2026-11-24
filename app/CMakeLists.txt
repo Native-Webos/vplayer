@@ -17,7 +17,7 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp)
@@ -87,6 +87,11 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_dovi_detect PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_dovi_detect PRIVATE wnk_media)
     add_test(NAME unit.vplayer.dovi_detect COMMAND test_dovi_detect)
+    add_executable(test_network tests/test_network.cpp network.cpp)
+    target_include_directories(test_network PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_include_directories(test_network SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")
+    target_link_libraries(test_network PRIVATE wnk_media wnk_platform wnk_storage wnk_async)
+    add_test(NAME unit.vplayer.network COMMAND test_network)
 endif ()
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.
