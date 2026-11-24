@@ -8,6 +8,7 @@
 // on a worker while the UI comes up; Settings shows what it reported.
 #include "app_settings.hpp"
 #include "library.hpp"
+#include "music_page.hpp"
 #include "network_page.hpp"
 #include "playlists_page.hpp"
 #include "pages.hpp"
@@ -90,9 +91,7 @@ class MainScreen : public Screen {
         auto &stack = col.add<View>();
         stack.set_height(Dim::fill());
         pages_[static_cast<size_t>(Tab::Video)] = &stack.add<vplayer::HomePage>(s_);
-        pages_[static_cast<size_t>(Tab::Music)] = &stack.add<vplayer::PlaceholderPage>(
-            vui::icon("music"), "Music is coming",
-            "Albums, artists and songs from your drives and network shares, with VLC's audio formats.");
+        pages_[static_cast<size_t>(Tab::Music)] = &stack.add<vplayer::MusicPage>(s_);
         browse_ = &stack.add<vplayer::BrowsePage>(s_);
         pages_[static_cast<size_t>(Tab::Browse)] = browse_;
         network_ = &stack.add<vplayer::NetworkPage>(s_, nullptr);

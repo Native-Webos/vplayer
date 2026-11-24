@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/player_screen.hpp"
 
+#include "music.hpp"
+
 #include "library.hpp"
 #include "ui/theme.hpp"
 
@@ -546,6 +548,13 @@ PlayerScreen::PlayerScreen(Services &services, Navigator &nav, Opener open, std:
     video_ = &add<VideoView>(nullptr);
     video_->name = "player.video";
 
+    // Audio files: the album's cover (or a music note) where the picture would be.
+    art_ = &add<ImageView>("");
+    art_->set_size(520, 520);
+    art_->set_fit(ImageFit::Contain);
+    art_->set_align(Align::Center, Align::Center);
+    art_->set_visible(false);
+
     subs_ = &add<wnk::media::SubtitleView>();
     subs_->name = "player.subtitles";
     subs_->set_visible(false);
@@ -690,6 +699,18 @@ void PlayerScreen::start(Ui &ui) {
     set_background(plane ? std::nullopt : std::optional<Color>(render::kBlack));
     ui.set_clear_color(plane ? std::optional<Color>(render::kTransparent) : std::nullopt);
     title_->set_text(display_name(e.name));
+    const bool audio = e.kind == platform::FileKind::Audio && e.path.find("://") == std::string::npos;
+    art_->set_visible(audio);
+    if (audio) {
+        std::vector<platform::FileEntry> siblings;
+        std::string err;
+        std::vector<std::string> images;
+        if (platform::list_folder(e.path.substr(0, e.path.rfind('/')), &siblings, &err, 500))
+            for (const auto &x : siblings)
+                if (x.kind == platform::FileKind::Image) images.push_back(x.path);
+        const std::string cover = pick_cover(images);
+        art_->set_url(cover.empty() ? ui::icon("music") : "file://" + cover);
+    }
     const std::string folder = e.path.substr(0, e.path.rfind('/'));
     std::string sub = folder.substr(folder.rfind('/') + 1);
     if (queue_.size() > 1) sub += " · " + std::to_string(index_ + 1) + " of " + std::to_string(queue_.size());

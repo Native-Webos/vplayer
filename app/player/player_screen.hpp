@@ -116,6 +116,7 @@ class PlayerScreen : public wnk::ui::Screen {
     wnk::app::WakeLock wake_;
 
     VideoView *video_ = nullptr;
+    wnk::ui::ImageView *art_ = nullptr;  // audio: the album's cover
     // Hardware path: subtitles drawn by the app over the TV's picture (the software path has VLC
     // blend them into its frames).
     wnk::media::SubtitleView *subs_ = nullptr;
