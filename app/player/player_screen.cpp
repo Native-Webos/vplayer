@@ -459,10 +459,16 @@ class PlayerPanel : public View {
 
     void build_playback(Ui &, Playback &p, PlayerSettings &st) {
         section("SPEED AND REPEAT");
-        rows_->add<Choice>("Speed", kSpeedNames, st.speed, [this](Ui &, int i) {
-            screen_.settings().speed = i;
-            screen_.apply_speed();
-        });
+        if (p.can_change_rate()) {
+            rows_->add<Choice>("Speed", kSpeedNames, st.speed, [this](Ui &, int i) {
+                screen_.settings().speed = i;
+                screen_.apply_speed();
+            });
+        } else {
+            rows_->add<ValueRow>("Speed", "1× · not with the TV decoder", [](Ui &ui) {
+                ui.toast("Other speeds work with the software decoder only, for now.");
+            });
+        }
         std::string ab = "Set start (A)";
         if (st.a_ms >= 0 && st.b_ms < 0) ab = "A " + clock_text(st.a_ms) + " · set end (B)";
         if (st.a_ms >= 0 && st.b_ms >= 0) ab = clock_text(st.a_ms) + " → " + clock_text(st.b_ms) + " · OK clears";
@@ -709,8 +715,10 @@ void PlayerScreen::apply_session() {
 }
 
 void PlayerScreen::apply_speed() {
-    if (playback_) playback_->set_rate(kSpeeds[settings_.speed]);
-    speed_btn_->set_text(kSpeedNames[static_cast<size_t>(settings_.speed)]);
+    // The choice carries over to the next file; this one may not be able to follow it.
+    const bool fixed = playback_ && !playback_->can_change_rate();
+    if (playback_ && !fixed) playback_->set_rate(kSpeeds[settings_.speed]);
+    speed_btn_->set_text(fixed ? "1×" : kSpeedNames[static_cast<size_t>(settings_.speed)]);
 }
 
 void PlayerScreen::go_to(Ui &ui, int delta) {
@@ -1006,7 +1014,7 @@ void PlayerScreen::update(Ui &ui, float dt) {
         if (len > 0)
             for (const auto &ch : chapters) seek_->marks.push_back(static_cast<float>(ch.start_ms) / len);
         if (len > 0) {
-            const float rate = std::max(0.1f, kSpeeds[settings_.speed]);
+            const float rate = playback_->can_change_rate() ? std::max(0.1f, kSpeeds[settings_.speed]) : 1.0f;
             const std::time_t end = std::time(nullptr) + static_cast<std::time_t>((len - t) / 1000 / rate);
             char buf[32];
             std::strftime(buf, sizeof buf, "Ends at %H:%M", std::localtime(&end));
