@@ -17,7 +17,7 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp

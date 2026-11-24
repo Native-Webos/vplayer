@@ -9,6 +9,7 @@
 #include "app_settings.hpp"
 #include "library.hpp"
 #include "network_page.hpp"
+#include "playlists_page.hpp"
 #include "pages.hpp"
 #include "player/hw_playback.hpp"
 #include "player/player_screen.hpp"
@@ -96,8 +97,7 @@ class MainScreen : public Screen {
         pages_[static_cast<size_t>(Tab::Browse)] = browse_;
         network_ = &stack.add<vplayer::NetworkPage>(s_, nullptr);
         pages_[static_cast<size_t>(Tab::Network)] = network_;
-        pages_[static_cast<size_t>(Tab::Playlists)] = &stack.add<vplayer::PlaceholderPage>(
-            vui::icon("playlist"), "Playlists are coming", "M3U, XSPF and PLS playlists and IPTV channel lists.");
+        pages_[static_cast<size_t>(Tab::Playlists)] = &stack.add<vplayer::PlaylistsPage>(s_);
         for (size_t i = 0; i < pages_.size(); ++i) pages_[i]->set_visible(i == 0);
     }
 
@@ -403,7 +403,8 @@ int main(int argc, char **argv) {
     config.title = "VPlayer";
     config.script_env_prefix = "APP_VPLAYER";  // APP_VPLAYER_KEYS=Return,Escape drives the host smoke test
     config.theme = vplayer::ui::make_theme();
-    config.storage = true;  // saved servers and addresses, resume points (DB8 on the TV)
+    config.storage = true;
+    config.http = true;     // IPTV and playlist addresses, channel logos  // saved servers and addresses, resume points (DB8 on the TV)
     config.font_regular = "fonts/Inter-Regular.ttf";
     config.font_bold = "fonts/Inter-SemiBold.ttf";
     return wnk::app::run(argc, argv, config, [] { return std::make_unique<App>(); });
