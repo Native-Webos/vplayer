@@ -31,6 +31,7 @@
 // VLC's decoder threads. interrupt() and the destructor unblock both.
 #pragma once
 
+#include "player/cea608.hpp"
 #include "player/dovi_detect.hpp"
 #include "player/playback.hpp"
 
@@ -81,6 +82,12 @@ class VlcSource final : public wnk::media::MediaSource {
     void set_force_pcm(bool on) { force_pcm_.store(on); }
     // VLC's audio filters on the way to the TV (decoded PCM then), from the next select().
     void set_audio_effects(const AudioEffects &fx) { effects_ = fx; }
+    // CEA-608 closed captions found in the video (the first packets are looked at), and drawing
+    // them as subtitle track kClosedCaptionsTrack instead of libVLC's subtitles.
+    static constexpr int kClosedCaptionsTrack = 9990;
+    bool has_closed_captions() const;
+    void set_closed_captions(bool on);
+
     // Every SubRip line as an ASS event too (Settings: a subtitle colour other than white).
     void set_subrip_all_ass(bool on) { subrip_all_ass_.store(on); }
 
@@ -171,6 +178,11 @@ class VlcSource final : public wnk::media::MediaSource {
     std::atomic<bool> force_pcm_{false};
     std::atomic<bool> subrip_all_ass_{false};
     AudioEffects effects_;  // set before open (controller threads read it in select)
+    // Closed captions (mu_): found, being drawn, and the access units' pairs reordered by time.
+    bool cc_seen_ = false, cc_on_ = false;
+    int cc_checked_ = 0;
+    std::unique_ptr<Cea608Decoder> cc_;
+    std::map<int64_t, std::vector<std::pair<uint8_t, uint8_t>>> cc_reorder_;
     // Reader thread (select() runs while it is parked): the stretcher and its timeline.
     std::unique_ptr<wnk::media::TimeStretch> stretch_;
     int64_t stretch_base_us_ = wnk::media::kNoTime, stretch_in_us_ = wnk::media::kNoTime, stretch_frames_ = 0;

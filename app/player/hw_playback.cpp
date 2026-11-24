@@ -128,6 +128,7 @@ class HwPlayback final : public Playback {
         const auto now = std::chrono::steady_clock::now();
         if (now < next_sync_) return;
         next_sync_ = now + std::chrono::milliseconds(250);
+        if (cc_selected_) return;  // closed captions: the app's own track, not libVLC's
         const int id = source_->subtitle_track();
         if (id != controller_->subtitle_track()) {
             WNK_LOGI(kCat, "subtitle track %d (%s)", id, source_->subtitle_codec(id).c_str());
@@ -184,12 +185,23 @@ class HwPlayback final : public Playback {
             if (t.id >= 0 && t.kind == media::SubtitleKind::None) name += " (not shown with the TV decoder yet)";
             out.push_back({t.id, name});
         }
+        if (source_->has_closed_captions()) out.push_back({VlcSource::kClosedCaptionsTrack, "Closed captions (CC1)"});
         return out;
     }
     // libVLC's selection (the controller follows it within tick()'s period).
-    int subtitle_track() const override { return controller_ ? source_->subtitle_track() : -1; }
+    int subtitle_track() const override {
+        if (!controller_) return -1;
+        return cc_selected_ ? VlcSource::kClosedCaptionsTrack : source_->subtitle_track();
+    }
     void set_subtitle_track(int id) override {
         if (!controller_) return;
+        cc_selected_ = id == VlcSource::kClosedCaptionsTrack;
+        source_->set_closed_captions(cc_selected_);
+        if (cc_selected_) {  // libVLC's subtitles off, the captions as the shown track
+            source_->set_subtitle_track(-1);
+            controller_->set_subtitle_track(id);
+            return;
+        }
         source_->set_subtitle_track(id);
         controller_->set_subtitle_track(id);
         next_sync_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);  // libVLC catches up
@@ -308,7 +320,7 @@ class HwPlayback final : public Playback {
         }
         const int sub = controller_->subtitle_track();
         if (sub >= 0) {
-            const std::string codec = source_->subtitle_codec(sub);
+            const std::string codec = sub == VlcSource::kClosedCaptionsTrack ? "CEA-608 closed captions" : source_->subtitle_codec(sub);
             rows.emplace_back("Subtitles", (codec.empty() ? std::string("waiting for libVLC") : codec) + " · drawn by the app · " +
                                                std::to_string(controller_->subtitle_store().count(sub)) + " cues read");
         }
@@ -330,6 +342,7 @@ class HwPlayback final : public Playback {
     int64_t subtitle_delay_us_ = 0;
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
     AudioEffects effects_;  // what this file was opened with
+    bool cc_selected_ = false;  // closed captions shown (from the video, not a libVLC track)
     int area_mode_ = 0;  // AspectMode: Fit
     float area_zoom_ = 1;
     float look_scale_ = 0.055f;

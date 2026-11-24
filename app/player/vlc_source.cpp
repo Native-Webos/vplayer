@@ -181,6 +181,19 @@ std::string VlcSource::dovi_text() const {
     return dovi_text_;
 }
 
+bool VlcSource::has_closed_captions() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return cc_seen_;
+}
+
+void VlcSource::set_closed_captions(bool on) {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (on && !cc_) cc_ = std::make_unique<Cea608Decoder>(kClosedCaptionsTrack);
+    if (on && !cc_on_ && cc_) cc_->reset();
+    cc_on_ = on;
+    cc_reorder_.clear();
+}
+
 std::vector<media::FontAttachment> VlcSource::fonts() const {
     std::lock_guard<std::mutex> lock(mu_);
     return fonts_;
@@ -676,6 +689,33 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
         if (when != WNK_BRIDGE_NO_TIME && when < self->audio_from_us_) return 0;
         self->audio_from_us_ = kNoTime;
     }
+    // Closed captions in H.264/HEVC SEI: looked for in the first packets, decoded while chosen.
+    if (s == self->video_ && (s->id == CodecId::H264 || s->id == CodecId::Hevc) &&
+        (self->cc_on_ || (!self->cc_seen_ && self->cc_checked_ < 300))) {
+        auto pairs = cc608_pairs(data, size, s->id == CodecId::Hevc);
+        ++self->cc_checked_;
+        if (!pairs.empty() && !self->cc_seen_) {
+            self->cc_seen_ = true;
+            WNK_LOGI(kCat, "closed captions (CEA-608) in the video");
+        }
+        if (self->cc_on_ && pts != WNK_BRIDGE_NO_TIME) {
+            // Decode order to presentation order: B-frames come before the pictures they follow.
+            self->cc_reorder_[pts] = std::move(pairs);
+            while (self->cc_reorder_.size() > 8) {
+                const auto first = self->cc_reorder_.begin();
+                for (const auto &p : first->second) {
+                    for (auto &cue : self->cc_->feed(p.first, p.second, first->first)) {
+                        Item ci;
+                        ci.stream = s;
+                        ci.pts = cue->start_us;
+                        ci.cue = std::move(cue);
+                        self->queue_.push_back(std::move(ci));
+                    }
+                }
+                self->cc_reorder_.erase(first);
+            }
+        }
+    }
 
     // Back-pressure: wait for room (the controller reads as it feeds the decoder).
     self->space_.wait(lock, [self, s] {
@@ -881,6 +921,8 @@ bool VlcSource::seek(int64_t pts_us, std::string *error) {
         seek_gop_.clear();
         seek_gop_bytes_ = 0;
         audio_from_us_ = kNoTime;
+        cc_reorder_.clear();
+        if (cc_) cc_->reset();
         for (auto &st : streams_)
             if (st->cat != WNK_ES_SUBTITLE) st->awaiting_flush = true;
     }
@@ -1038,6 +1080,8 @@ VlcSource::~VlcSource() = default;
 std::string VlcSource::audio_path_text() const { return "none"; }
 std::string VlcSource::dovi_text() const { return {}; }
 std::vector<media::FontAttachment> VlcSource::fonts() const { return {}; }
+bool VlcSource::has_closed_captions() const { return false; }
+void VlcSource::set_closed_captions(bool) {}
 bool VlcSource::open(const std::string &, std::string *error) {
     if (error) *error = "this build has no libVLC";
     return false;
