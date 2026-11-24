@@ -34,7 +34,7 @@ Bytes unit(int mag, int row, const Bytes &payload40) {
     return out;
 }
 
-Bytes header(int mag, int page, bool subtitle, bool erase) {
+Bytes header(int mag, int page, bool subtitle, bool erase, int national = 0) {
     Bytes p(40, odd(' '));
     p[0] = kHam[page & 15];
     p[1] = kHam[page >> 4];
@@ -43,7 +43,7 @@ Bytes header(int mag, int page, bool subtitle, bool erase) {
     p[4] = kHam[0];
     p[5] = kHam[subtitle ? 8 : 0];
     p[6] = kHam[0];
-    p[7] = kHam[0];
+    p[7] = kHam[(national & 7) << 1];  // C11 in bit 0, C12-C14 above
     return unit(mag, 0, p);
 }
 
@@ -96,6 +96,15 @@ TEST("first_subtitle_page") {
     auto cues = dec.decode(p.data(), p.size(), 0, 5);
     REQUIRE(cues.size() == 1);
     CHECK_EQ(cues[0]->text, std::string("Subtitle"));
+}
+
+TEST("national_german") {
+    TeletextDecoder dec(8, 0x88);
+    // German: 0x5B Ä, 0x7E ß, 0x40 §.
+    const Bytes p = pes({header(8, 0x88, true, true, 4), text_row(8, 20, "Gr[n }berweg~ @1", true)});
+    auto cues = dec.decode(p.data(), p.size(), 0, 1);
+    REQUIRE(cues.size() == 1);
+    CHECK_EQ(cues[0]->text, std::string("Gr\xC3\x84n \xC3\xBC" "berweg\xC3\x9F \xC2\xA7" "1"));
 }
 
 TEST("garbage") {

@@ -74,7 +74,7 @@ release and date.
       choice and delay; within a frame of the picture. On the TV 2026-11-24
 - [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
 - [x] DVB subtitles on the hardware path (host-tested)
-- [x] Teletext subtitles on the hardware path (host-tested; ASCII only, no national sets)
+- [x] Teletext subtitles on the hardware path, with the 8 national character options (host-tested)
 - [x] SubRip `{\an8}` (top) placement and tag styling on the hardware path (libass; host-tested)
 - [x] Aspect ratio and zoom on the hardware path (the picture's rectangle on the video plane; host-tested)
 - [x] Speed on the hardware path: VLC decodes audio to PCM, the app time-stretches it (RESEARCH.md §15)

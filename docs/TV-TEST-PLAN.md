@@ -115,7 +115,7 @@ how to test it, what should happen, and what the log shows.
 | 7b.11 | Software decoder → Video → Take a snapshot | "Snapshot saved…" and a PNG in "VPlayer snapshots" on the drive (can the app write to USB?) |
 | 7b.12 | Playback → Add to a playlist → New playlist; Playlists tab | The list with the file; plays; Red removes an entry / the list |
 | 7b.13 | Browse a folder of videos, Home "Recently added" | Thumbnails appear one by one (log `[thumbs] … in N ms`); none made while a video plays |
-| 7b.14 | A DVB recording with teletext subtitles (e.g. page 888) on the TV decoder | Subtitles show and clear; accented letters may be wrong (no national sets yet) |
+| 7b.14 | A DVB recording with teletext subtitles (e.g. page 888) on the TV decoder | Subtitles show and clear, with the language's accented letters |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
 

@@ -7,7 +7,9 @@
 // one VLC's stream names (magazine, page), else the first page flagged as subtitles.
 //
 // A row's text is what lies between its start-box and end-box codes (subtitle pages box their text),
-// else the whole row; control codes become spaces. A cue goes out at the end of each PES that
+// else the whole row; control codes become spaces, and the page's national option (from its header)
+// gives the accented letters (English, French, German, Swedish/Finnish/Hungarian, Czech/Slovak,
+// Portuguese/Spanish, Italian, Romanian; VLC's tables). A cue goes out at the end of each PES that
 // brought rows of the page (a later, fuller one replaces it); a header with no rows clears.
 // Pure, tested on the host.
 #pragma once
@@ -38,6 +40,7 @@ class TeletextDecoder {
     int magazine_, page_;
     bool on_page_ = false;  // rows that follow belong to the page
     bool pending_ = false;  // a header or rows not yet sent as a cue
+    int national_ = 0;      // the page's national character option (0: English)
     std::array<std::string, 24> rows_;
 };
 
