@@ -67,7 +67,7 @@ class HwPlayback final : public Playback {
                                                const media::PlaybackSnapshot &snap) {
             WNK_LOGI(kCat, "%s -> %s%s%s", media::play_state_name(from), media::play_state_name(to),
                      snap.error.empty() ? "" : ": ", snap.error.c_str());
-            if (to == media::PlayState::Ready) controller_->set_video_area({0, 0, 1920, 1080});
+            if (to == media::PlayState::Ready) apply_area();
             if (to == media::PlayState::Playing) played_ = true;
         });
         controller_->set_video_area({0, 0, 1920, 1080});
@@ -214,6 +214,12 @@ class HwPlayback final : public Playback {
         if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header(look_scale_, look_box_);
         return header;
     }
+    bool set_picture_area(int mode, float zoom) override {
+        area_mode_ = mode;
+        area_zoom_ = zoom;
+        apply_area();
+        return true;
+    }
     void set_subtitle_look(float scale, bool box) override {
         look_scale_ = scale;
         look_box_ = box;
@@ -310,9 +316,37 @@ class HwPlayback final : public Playback {
     std::chrono::steady_clock::time_point next_sync_{};
     int64_t subtitle_delay_us_ = 0;
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
+    int area_mode_ = 0;  // AspectMode: Fit
+    float area_zoom_ = 1;
     float look_scale_ = 0.055f;
     bool look_box_ = false;
     std::string backend_name_, error_;
+
+    // The picture's rectangle in the TV's 1920x1080 app space for the aspect mode and zoom (modes as
+    // VideoView's: Fit, Fill, 16:9, 4:3, 21:9, Stretch). Fill and zoom reach past the screen's edges.
+    void apply_area() {
+        if (!controller_) return;
+        const auto s = controller_->snapshot();
+        const int vw = s.format.video ? s.format.video->width : 0, vh = s.format.video ? s.format.video->height : 0;
+        if (vw <= 0 || vh <= 0) {
+            controller_->set_video_area({0, 0, 1920, 1080});
+            return;
+        }
+        const float screen = 1920.0f / 1080.0f;
+        float dar = static_cast<float>(vw) / static_cast<float>(vh);
+        if (area_mode_ == 2) dar = 16.0f / 9;
+        if (area_mode_ == 3) dar = 4.0f / 3;
+        if (area_mode_ == 4) dar = 21.0f / 9;
+        float w = 1920, h = 1080;
+        if (area_mode_ == 1) {  // Fill: cover the screen
+            if (dar > screen) w = 1080 * dar; else h = 1920 / dar;
+        } else if (area_mode_ != 5) {  // fit, at the mode's ratio (Stretch: the whole screen)
+            if (dar > screen) h = 1920 / dar; else w = 1080 * dar;
+        }
+        w *= area_zoom_;
+        h *= area_zoom_;
+        controller_->set_video_area({(1920 - w) / 2, (1080 - h) / 2, w, h});
+    }
     bool paused_ = false;
     bool played_ = false;  // set on the main thread by the state callback
 };

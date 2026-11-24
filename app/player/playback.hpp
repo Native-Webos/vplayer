@@ -135,6 +135,14 @@ class Playback {
     virtual std::vector<wnk::media::FontAttachment> subtitle_fonts() const { return {}; }
     virtual std::pair<int, int> video_size() const { return {0, 0}; }
     // How text subtitles should look (Settings): height as a fraction of the picture, on a box.
+    // Aspect mode and zoom for engines whose picture the screen does not draw (the TV decoder):
+    // the picture's rectangle on screen. False when the engine draws through VideoView instead.
+    // `mode` is an AspectMode (video_view.hpp) as an int.
+    virtual bool set_picture_area(int mode, float zoom) {
+        (void)mode;
+        (void)zoom;
+        return false;
+    }
     virtual void set_subtitle_look(float scale, bool box) {
         (void)scale;
         (void)box;

@@ -412,10 +412,12 @@ class PlayerPanel : public View {
         rows_->add<Choice>("Aspect ratio", aspects, static_cast<int>(st.aspect), [this](Ui &, int i) {
             screen_.settings().aspect = static_cast<AspectMode>(i);
             screen_.video().set_aspect(screen_.settings().aspect);
+            screen_.playback()->set_picture_area(i, screen_.settings().zoom / 100.0f);
         });
         auto &zoom = rows_->add<Slider>("Zoom", 100, 300, 5, static_cast<float>(st.zoom), [this](Ui &, float v) {
             screen_.settings().zoom = static_cast<int>(v);
             screen_.video().set_zoom(v / 100.0f);
+            screen_.playback()->set_picture_area(static_cast<int>(screen_.settings().aspect), v / 100.0f);
         });
         zoom.set_format([](float v) { return std::to_string(static_cast<int>(v)) + " %"; });
         if (p.can_filter_video()) {
@@ -783,6 +785,7 @@ void PlayerScreen::apply_session() {
     if (settings_.adjust.enabled) playback_->set_picture_adjust(settings_.adjust);
     video_->set_aspect(settings_.aspect);
     video_->set_zoom(settings_.zoom / 100.0f);
+    playback_->set_picture_area(static_cast<int>(settings_.aspect), settings_.zoom / 100.0f);
 }
 
 void PlayerScreen::apply_speed() {
