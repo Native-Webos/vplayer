@@ -58,7 +58,11 @@ Then the rest of the sections as time allows.
 | 7b.19 captions across a seek | Pass (no stale line after the seek) |
 | Audio and subtitle languages (new) | Pass (French audio track chosen; subtitles always on) |
 | Effects debounce, Continue watching thumbnails | Pass |
-| 3.3–3.6 SMB, 7b.12 playlist | Not yet (need a NAS, typing) |
+| 3.6 SMB playback (test share: `app/tools/smb-test/run.sh`) | Pass: TV decoder, skips land in ~50 ms, 0 dropped |
+| 3.7 subtitle file beside a video on the share | Pass after a fix: VLC 3 never used it for network files; the app now adds what VLC's listing matched |
+| 3.3, 3.5 sign-in needed, wrong password | Pass after fixes: the dialog now comes on the TV decoder path (it fell back to software); Back ends it once; no password in VLC's messages |
+| 3.4 signing in with the remote, "Remember" | Not yet: text goes in only through the TV's keyboard (needs a person) |
+| 7b.12 playlist | Not yet (typing a name) |
 
 Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on
 Continue watching) are done.
