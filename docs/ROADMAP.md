@@ -47,7 +47,7 @@ release and date.
       of 400%. Not audio (same with `:no-audio`), not a CPU quota (no cgroup limit), not redraw rate,
       not thread count. Next: profile the vout thread (timestamps in lock/display callbacks), try
       `:no-drop-late-frames`, compare with the CLI using `--vout=vmem`
-- [ ] Screens: URL entry
+- [x] Screens: URL entry (Network → Open a network stream; Home → Open a stream)
 
 ## P2: hardware path (the reason this port is worth doing)
 - [x] `modules/wnk_bridge`: our VLC 3 stream output, built out of tree (`libvlc/build.sh modules`) into
@@ -73,14 +73,15 @@ release and date.
       timed text and WebVTT from VLC's subtitle streams, files beside the media, the panel's track
       choice and delay; within a frame of the picture. On the TV 2026-11-24
 - [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
-- [ ] DVB and teletext subtitles on the hardware path
+- [x] DVB subtitles on the hardware path (host-tested)
+- [ ] Teletext subtitles on the hardware path
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
 - [x] Speed on the hardware path: VLC decodes audio to PCM, the app time-stretches it (RESEARCH.md §15)
 - [x] Chapters on the hardware path: listed from libVLC, chosen through the controller's seek; on the TV 2026-11-24
 - [x] Dolby Vision declared to Starfish (RESEARCH.md §14): configuration record from MKV/MP4, or RPUs in
       the first keyframe; Profile 7 fed as 8.1. On the TV 2026-11-24
 - [x] Seek precision: lands on the keyframe at or before the target (was up to 9 s early)
-- [ ] Settings → Decoder: Automatic / Hardware / Software (today: the `"decoder"` launch parameter)
+- [x] Settings → Decoder: Automatic / Software only (host-tested)
 
 ## P3: VLC's sources
 - [x] Network tab (RESEARCH.md §16): servers found by libVLC (UPnP/DLNA, mDNS), servers added by
