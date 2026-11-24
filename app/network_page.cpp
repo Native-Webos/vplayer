@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "network_page.hpp"
 
+#include "vlc_engine.hpp"
+
 #include "library.hpp"
 
 #include "wnk/log.hpp"
@@ -176,6 +178,7 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
     root_.clear();
     root_.push_back({Item::OpenUrl, {}});
     root_.push_back({Item::AddServer, {}});
+    if (!places_.servers.empty() || !places_.urls.empty()) root_.push_back({Item::Manage, {}});
     for (const auto &s : places_.servers) root_.push_back({Item::Saved, s});
     for (const auto &s : found_) {
         const bool saved = std::any_of(places_.servers.begin(), places_.servers.end(),
@@ -201,6 +204,13 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
                 t.subtitle = "SMB, NFS, FTP, SFTP or WebDAV by address";
                 t.icon_url = ui::icon("server");
                 break;
+            case Item::Manage: {
+                const size_t n = places_.servers.size() + places_.urls.size();
+                t.title = "Manage saved";
+                t.subtitle = std::to_string(n) + (n == 1 ? " server or address · remove" : " servers and addresses · remove");
+                t.icon_url = ui::icon("trash");
+                break;
+            }
             case Item::Saved:
             case Item::Found: t = entry_tile(r.entry); break;
             case Item::Recent:
@@ -212,8 +222,10 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
         return std::make_unique<Tile>(t);
     });
     message_->set_visible(false);
-    hint_->set_text(found_.empty() ? "Looking for media servers on this network… Red: forget a saved server or address."
-                                   : "Red: forget a saved server or address.");
+    const char *remove = places_.servers.empty() && places_.urls.empty()
+                             ? ""
+                             : "To remove a saved server or address: Manage saved, or Red on it.";
+    hint_->set_text(found_.empty() ? std::string("Looking for media servers on this network… ") + remove : std::string(remove));
     if ((keep_focus && had_focus) || want_focus_) {
         want_focus_ = false;
         grid_->focus_index(ui, std::min(focused, root_.size() - 1));
@@ -271,6 +283,7 @@ void NetworkPage::activate(Ui &ui, size_t i) {
         switch (r.what) {
             case Item::OpenUrl: ask_url(ui); break;
             case Item::AddServer: ask_server(ui); break;
+            case Item::Manage: manage_saved(ui); break;
             case Item::Saved:
             case Item::Found: open(ui, r.entry, r.entry.mrl); break;
             case Item::Recent: play_url(ui, r.entry.mrl); break;
@@ -323,17 +336,42 @@ bool NetworkPage::on_action(Ui &ui, const input::ActionEvent &e) {
 void NetworkPage::forget(Ui &ui, size_t i) {
     if (i >= root_.size()) return;
     const RootItem r = root_[i];
-    if (r.what == Item::Saved) {
+    if (r.what == Item::Saved || r.what == Item::Recent) confirm_remove(ui, r.what == Item::Saved, r.entry);
+}
+
+void NetworkPage::manage_saved(Ui &ui) {
+    auto d = std::make_unique<Dialog>("Saved servers and addresses", "Choose one to remove it from this list.");
+    for (const auto &s : places_.servers)
+        d->add_button(s.name + " · " + mrl_protocol(s.mrl), [this, s](Ui &u) { confirm_remove(u, true, s); });
+    for (const auto &url : places_.urls) {
+        const NetEntry e{mrl_display_name(url), url, NetEntry::Kind::Media, {}, {}};
+        d->add_button(e.name + " · address", [this, e](Ui &u) { confirm_remove(u, false, e); });
+    }
+    d->add_button("Close");
+    ui.show_dialog(std::move(d));
+}
+
+void NetworkPage::confirm_remove(Ui &ui, bool server, const NetEntry &entry) {
+    const std::string what = server ? "the server " : "the address ";
+    auto d = std::make_unique<Dialog>("Remove " + entry.name + "?",
+                                      "Removes " + what + loggable(entry.mrl) + " from this list. Its files are not touched.");
+    d->add_button("Remove", [this, server, mrl = entry.mrl, name = entry.name](Ui &u) { remove_place(u, server, mrl, name); });
+    d->add_button("Cancel");
+    ui.show_dialog(std::move(d));
+}
+
+void NetworkPage::remove_place(Ui &ui, bool server, const std::string &mrl, const std::string &name) {
+    if (server) {
         places_.servers.erase(std::remove_if(places_.servers.begin(), places_.servers.end(),
-                                             [&](const NetEntry &x) { return x.mrl == r.entry.mrl; }),
+                                             [&](const NetEntry &x) { return x.mrl == mrl; }),
                               places_.servers.end());
-    } else if (r.what == Item::Recent) {
-        places_.urls.erase(std::remove(places_.urls.begin(), places_.urls.end(), r.entry.mrl), places_.urls.end());
     } else {
-        return;
+        places_.urls.erase(std::remove(places_.urls.begin(), places_.urls.end(), mrl), places_.urls.end());
     }
     save_places();
-    ui.toast("Forgot " + r.entry.name);
+    WNK_LOGI(kCat, "removed %s %s", server ? "server" : "address", loggable(mrl).c_str());
+    ui.toast("Removed " + name);
+    want_focus_ = true;
     show_root(ui, true);
 }
 

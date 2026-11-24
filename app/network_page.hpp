@@ -29,7 +29,7 @@ class NetworkPage : public Page {
     void open_url_dialog(wnk::ui::Ui &ui) { ask_url(ui); }
 
  private:
-    enum class Item : uint8_t { OpenUrl, AddServer, Saved, Found, Recent };
+    enum class Item : uint8_t { OpenUrl, AddServer, Manage, Saved, Found, Recent };
     struct RootItem {
         Item what;
         NetEntry entry;  // Saved/Found: the server; Recent: name = mrl = the address
@@ -43,6 +43,10 @@ class NetworkPage : public Page {
     void ask_url(wnk::ui::Ui &ui);
     void ask_server(wnk::ui::Ui &ui);
     void forget(wnk::ui::Ui &ui, size_t i);
+    // Manage saved: the saved servers and addresses, each removable (after a confirmation).
+    void manage_saved(wnk::ui::Ui &ui);
+    void confirm_remove(wnk::ui::Ui &ui, bool server, const NetEntry &entry);
+    void remove_place(wnk::ui::Ui &ui, bool server, const std::string &mrl, const std::string &name);
     void play_url(wnk::ui::Ui &ui, const std::string &url);
     void save_places();
 
