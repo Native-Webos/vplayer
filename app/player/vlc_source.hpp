@@ -178,6 +178,7 @@ class VlcSource final : public wnk::media::MediaSource {
     std::atomic<bool> force_pcm_{false};
     std::atomic<bool> subrip_all_ass_{false};
     AudioEffects effects_;  // set before open (controller threads read it in select)
+    int stray_id_ = -1;     // a wanted kind offered under another id (mu_); see on_add
     // Closed captions (mu_): found, being drawn, and the access units' pairs reordered by time.
     bool cc_seen_ = false, cc_on_ = false;
     int cc_checked_ = 0;

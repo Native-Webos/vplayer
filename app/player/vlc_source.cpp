@@ -374,10 +374,14 @@ bool VlcSource::select(int video_track, int audio_track, const media::BackendCap
     // Wait for the selected streams to be added (their formats come from VLC's packetizers).
     std::unique_lock<std::mutex> lock(mu_);
     const bool ok = cv_.wait_for(lock, std::chrono::seconds(15), [this] {
-        return interrupted_ || ((want_video_ < 0 || video_) && (want_audio_ < 0 || audio_));
+        return interrupted_ || stray_id_ >= 0 || ((want_video_ < 0 || video_) && (want_audio_ < 0 || audio_));
     });
     if (interrupted_) {
         if (error) *error = "interrupted";
+        return false;
+    }
+    if (stray_id_ >= 0 && !((want_video_ < 0 || video_) && (want_audio_ < 0 || audio_))) {
+        if (error) *error = "libVLC numbered the streams differently (offered " + std::to_string(stray_id_) + ")";
         return false;
     }
     if (!ok) {
@@ -445,6 +449,8 @@ bool VlcSource::start_player(std::string *error) {
     // The media's own timestamps: VLC 3 converts a sout's to its playback clock, which restarts
     // at every seek (libvlc/patches/vlc/0004 adds the option).
     libvlc_media_add_option(m, ":sout-stream-time");
+    // MPEG-TS: number streams in order, as the parse did, not by PID (VLC's default when playing).
+    libvlc_media_add_option(m, ":no-ts-es-id-pid");
     // Only the selected streams (VLC 3 streams every one by default, transcoding each audio track).
     libvlc_media_add_option(m, ":no-sout-all");
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway
@@ -466,6 +472,7 @@ bool VlcSource::start_player(std::string *error) {
         queued_bytes_ = 0;
         streams_.clear();
         video_ = audio_ = nullptr;
+        stray_id_ = -1;
     }
     libvlc_media_player_t *mp = libvlc_media_player_new_from_media(m);
     libvlc_media_release(m);
@@ -546,8 +553,18 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
     }
     if (d->cat != WNK_ES_VIDEO && d->cat != WNK_ES_AUDIO) return nullptr;
     // Only the tracks select() asked for (VLC may offer others: a track changing, sout-all).
-    if (d->cat == WNK_ES_VIDEO && (d->es_id != self->want_video_ || self->video_ != nullptr)) return nullptr;
-    if (d->cat == WNK_ES_AUDIO && (d->es_id != self->want_audio_ || self->audio_ != nullptr)) return nullptr;
+    // The wanted kind offered under another id before ours came: the parse and the playback number
+    // streams differently. Say so at once rather than waiting for streams that will not come.
+    const bool video = d->cat == WNK_ES_VIDEO;
+    const int want = video ? self->want_video_ : self->want_audio_;
+    const bool have = video ? self->video_ != nullptr : self->audio_ != nullptr;
+    if (want >= 0 && !have && d->es_id != want && self->stray_id_ < 0) {
+        WNK_LOGW(kCat, "%s stream %d offered, %d wanted", video ? "video" : "audio", d->es_id, want);
+        self->stray_id_ = d->es_id;
+        self->cv_.notify_all();
+    }
+    if (video && (d->es_id != self->want_video_ || self->video_ != nullptr)) return nullptr;
+    if (!video && (d->es_id != self->want_audio_ || self->audio_ != nullptr)) return nullptr;
     auto s = std::make_unique<Stream>();
     s->cat = d->cat;
     s->es_id = d->es_id;
@@ -944,6 +961,7 @@ bool VlcSource::seek(int64_t pts_us, std::string *error) {
             stopping_ = false;
             streams_.clear();
             video_ = audio_ = nullptr;
+            stray_id_ = -1;
         }
         libvlc_media_player_play(mp_);
     }
