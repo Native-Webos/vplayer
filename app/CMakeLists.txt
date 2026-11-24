@@ -18,7 +18,7 @@ endif ()
 include("${_kit}/cmake/WnkApp.cmake")
 
 add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp music.cpp music_page.cpp search.cpp thumbnails.cpp
-        player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
+        player/frame_sink.cpp player/vlc_playback.cpp player/vlc_vars.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp
         player/ebml.cpp player/mkv_attachments.cpp player/teletext.cpp player/cea608.cpp)
@@ -39,7 +39,9 @@ if (WNK_WEBOS AND EXISTS "${_vlc_runtime}/lib/libvlc.so.5" AND EXISTS "${_vlc_in
     message(STATUS "vplayer: libVLC from ${VPLAYER_LIBVLC_DIR}")
     target_compile_definitions(vplayer PRIVATE VPLAYER_HAVE_LIBVLC=1)
     target_include_directories(vplayer SYSTEM PRIVATE "${_vlc_include}")
-    target_link_libraries(vplayer PRIVATE "${_vlc_runtime}/lib/libvlc.so.5")
+    # VLC's plugin headers (they include one another by bare name), for the one file that needs them.
+    set_source_files_properties(player/vlc_vars.cpp PROPERTIES COMPILE_OPTIONS "-isystem;${_vlc_include}/vlc/plugins")
+    target_link_libraries(vplayer PRIVATE "${_vlc_runtime}/lib/libvlc.so.5" "${_vlc_runtime}/lib/libvlccore.so.9")
     target_link_options(vplayer PRIVATE "LINKER:-rpath-link,${_vlc_runtime}/lib")  # libvlccore.so.9
     # lib/ (libvlc.so.5, libvlccore.so.9, vlc/plugins, vlc/lua) and share/ (vlc/lua) are merged into
     # the package's own lib/ and share/.

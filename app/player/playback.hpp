@@ -219,7 +219,8 @@ class Playback {
 
 // libVLC software playback of a local path or URL; nullptr if libVLC is not in this build.
 // `options` are per-media libVLC options (":no-audio", ":avcodec-threads=4"), for experiments.
-// `effects`: normalise and widen are VLC audio filters set at open; equalizer and volume apply live.
+// `effects`: all set before play; equalizer and volume then change live (the equalizer by reopening
+// while normalise or widen is on).
 std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *vlc, const std::string &mrl,
                                             const std::vector<std::string> &options = {}, const AudioEffects &effects = {});
 // A test pattern with a two-hour fake clock.

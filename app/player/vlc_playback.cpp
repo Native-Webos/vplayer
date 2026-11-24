@@ -4,6 +4,7 @@
 // callbacks in I420, copied into a FrameSink; audio is VLC's own (PulseAudio on the TV). VLC also
 // blends subtitles and runs its video filters (deinterlace, adjust) before the callback.
 #include "player/playback.hpp"
+#include "player/vlc_vars.hpp"
 #include "vlc_engine.hpp"
 
 #include "wnk/log.hpp"
@@ -73,8 +74,9 @@ std::vector<TrackOption> to_options(libvlc_track_description_t *list) {
 
 class VlcPlayback final : public Playback {
  public:
-    VlcPlayback(libvlc_instance_t *vlc, const std::string &mrl, const std::vector<std::string> &options)
-        : sink_(std::make_shared<FrameSink>()) {
+    VlcPlayback(libvlc_instance_t *vlc, const std::string &mrl, const std::vector<std::string> &options,
+                const AudioEffects &effects)
+        : sink_(std::make_shared<FrameSink>()), opened_(effects) {
         const bool url = mrl.find("://") != std::string::npos;
         libvlc_media_t *m = url ? libvlc_media_new_location(vlc, mrl.c_str()) : libvlc_media_new_path(vlc, mrl.c_str());
         if (m == nullptr) {
@@ -93,6 +95,15 @@ class VlcPlayback final : public Playback {
         }
         libvlc_video_set_callbacks(mp_, &VlcPlayback::lock_cb, &VlcPlayback::unlock_cb, &VlcPlayback::display_cb, this);
         libvlc_video_set_format_callbacks(mp_, &VlcPlayback::setup_cb, &VlcPlayback::cleanup_cb);
+        // The audio effects before play: the audio output takes the player's filters when it is made.
+        if (effects.volume != 100) libvlc_audio_set_volume(mp_, std::clamp(effects.volume, 0, 200));
+        if (effects.equalizer >= 0) set_equalizer(effects.equalizer);
+        if (effects.normalize || effects.widen) {
+            std::string filters = effects.equalizer >= 0 ? "equalizer" : "";
+            if (effects.normalize) filters += std::string(filters.empty() ? "" : ":") + "normvol";
+            if (effects.widen) filters += std::string(filters.empty() ? "" : ":") + "stereo_widen";
+            if (!set_player_audio_filters(mp_, filters)) WNK_LOGW(kCat, "vlc: audio filters %s not set", filters.c_str());
+        }
         if (libvlc_media_player_play(mp_) != 0) error_ = "libVLC refused to play it";
         WNK_LOGI(kCat, "vlc: play %s", mrl.c_str());
     }
@@ -264,12 +275,16 @@ class VlcPlayback final : public Playback {
             libvlc_audio_equalizer_release(eq);
         }
     }
-    void opened_with(const AudioEffects &fx) { opened_ = fx; }
-    // Equalizer and volume change live; normalise and widen are filters chosen at open.
+    // Equalizer and volume change live; normalise and widen are filters chosen at open, and with
+    // either on, libVLC's equalizer call would drop them: the equalizer then changes by reopening.
     bool apply_audio_effects(const AudioEffects &fx) override {
         if (fx.normalize != opened_.normalize || fx.widen != opened_.widen) return false;
-        set_equalizer(fx.equalizer);
+        if ((fx.normalize || fx.widen) && fx.equalizer != opened_.equalizer) return false;
+        // Only what changed (an unchanged equalizer set again would drop the other filters). The
+        // volume always: the audio output may not have existed when it was first set.
+        if (fx.equalizer != opened_.equalizer) set_equalizer(fx.equalizer);
         set_volume_percent(fx.volume);
+        opened_ = fx;
         return true;
     }
 
@@ -443,14 +458,7 @@ class VlcPlayback final : public Playback {
 std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *vlc, const std::string &mrl,
                                             const std::vector<std::string> &options, const AudioEffects &effects) {
     if (vlc == nullptr) return nullptr;
-    auto opts = options;
-    std::string filters;
-    if (effects.normalize) filters += "normvol";
-    if (effects.widen) filters += std::string(filters.empty() ? "" : ":") + "stereo_widen";
-    if (!filters.empty()) opts.push_back(":audio-filter=" + filters);
-    auto p = std::make_unique<VlcPlayback>(vlc, mrl, opts);
-    p->opened_with(effects);
-    return p;
+    return std::make_unique<VlcPlayback>(vlc, mrl, options, effects);
 }
 
 #else
