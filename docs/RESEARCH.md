@@ -177,3 +177,20 @@ What it took to cross-build VLC 3.0.24 with the webosbrew NDK. Each one is now h
   did not change it measurably.
 - Debug hook: launch parameter `{"play": "<path>", "vlcOptions": [":option", ...]}` passes per-media
   options to libVLC.
+
+## 11. Hardware path through libVLC (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
+
+- VLC's `smem` stream output passes compressed video, but not the codec setup, DTS, keyframe flags or
+  flushes, and only raw audio: not enough to feed a hardware decoder. Our own stream output
+  (`modules/wnk_bridge`, ~200 lines of C) passes all of that through a plain C sink whose address
+  travels in the sout chain (`#wnk_bridge{sink=<address>}`).
+- VLC 3 paces a sout by its decoder FIFO (`input_DecoderDecode(..., b_do_pace)` waits at 10 blocks), so a
+  sink that blocks in send makes libVLC read only as fast as the TV consumes.
+- The kit's PlaybackController drives the decoder unchanged: VlcSource is just another MediaSource.
+  Starfish Load of a 4K HEVC stream took 2.3 s; HDR10 mastering metadata from VLC's es_format reached
+  setHdrInfo. VLC's packetizers emit Annex-B with Annex-B extradata for H.264/HEVC from MP4/MKV.
+- `:input-fast-seek` makes libVLC land on a keyframe; for a phone recording with long GOPs that was
+  17 s before the target. Precise seeking needs feeding from the keyframe and hiding frames before the
+  target (or a decoder that honours a decode-from time).
+- Launch parameters for testing without a remote: `{"play": path, "at": seconds, "panel": tab,
+  "decoder": "software"|"hardware", "vlcOptions": [...]}`.

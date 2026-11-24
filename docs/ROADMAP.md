@@ -50,12 +50,31 @@ release and date.
 - [ ] Screens: URL entry
 
 ## P2: hardware path (the reason this port is worth doing)
-- [ ] `modules/wnk_bridge`: VLC 3 `sout_stream` → `wnk::media` Packet → kit Starfish/NDL backend
-- [ ] H.264/HEVC/VP9/AV1 MKV and MP4 play on the TV; seek, pause, audio track switch
-- [ ] HDR10/HLG/Dolby Vision metadata through the kit's existing path
-- [ ] Audio: passthrough AC-3/E-AC-3, AAC with ADTS; transcode DTS/TrueHD/FLAC/Vorbis in the sout chain
-- [ ] Subtitles: VLC SPU → kit subtitle view / libass renderer on the UI layer
-- [ ] Automatic choice of path from parsed tracks; manual override
+- [x] `modules/wnk_bridge`: our VLC 3 stream output, built out of tree (`libvlc/build.sh modules`) into
+      lib/vlc/plugins/stream_out; hands each elementary stream (codec setup, HDR metadata, PTS/DTS,
+      keyframe flags, flushes) to the app through a plain C sink; send blocks for back-pressure
+- [x] `VlcSource` (app/player/vlc_source.*): a kit MediaSource on libVLC: parse → tracks; select starts
+      `#wnk_bridge` or `#transcode{acodec=a52|s16l}:wnk_bridge` by the kit's audio_path(); Annex-B with
+      parameter sets on keyframes, HDR10+ SEI stripped, ADTS for AAC, AV1 temporal units; seek through
+      libVLC (fast seek) with packets dropped until a keyframe near the target
+- [x] `HwPlayback`: kit PlaybackController + AutoBackend (Starfish, NDL) behind the player's Playback
+      interface; UI cleared to transparent over the video plane; automatic fallback to the software
+      path when the TV decoder refuses a stream before the first picture
+- [x] On the TV 2026-11-24 (OLED65C1PTB, webOS 6.5.3):
+      - HEVC 3840×2160 HDR10 + TrueHD 7.1 (→ AC-3 5.1 by VLC) MKV: Starfish, HDR10 metadata sent,
+        0 frames dropped, TV shows its HDR badge
+      - H.264 720p + AAC MP4: Starfish, AAC with ADTS; seek to 2:00 lands on the keyframe at 1:42.97
+        and plays 311 ms after Seek, 0 dropped
+      - audio-only MKV (TrueHD → PCM): NDL
+      - MPEG-4 ASP AVI: refused by the TV decoder → software path on its own
+- [ ] Pause/resume and remote seeking on the TV (host-verified; `"at"` launch seek verified)
+- [ ] Subtitles on the hardware path: deliver VLC's SPU streams through the bridge, decode text (SRT,
+      ASS, WebVTT) and bitmap (PGS, DVB) subtitles, draw with the kit's subtitle view
+- [ ] Chapters, speed and audio-track switch on the hardware path verified on the TV
+- [ ] Dolby Vision (profile 5/8) declared to Starfish: VLC 3 does not report it; detect from the codec
+      setup or RPU NALs
+- [ ] Seek precision: fast seek lands on the keyframe before the target (can be many seconds early)
+- [ ] Settings → Decoder: Automatic / Hardware / Software (today: the `"decoder"` launch parameter)
 
 ## P3: VLC's sources
 - [ ] Services discovery: UPnP/DLNA, SMB, NFS, SFTP, FTP, mDNS; saved servers with credentials (SecretStore)
