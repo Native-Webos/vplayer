@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "pages.hpp"
 
+#include <sys/stat.h>
+
 #include "library.hpp"
 #include "thumbnails.hpp"
 
@@ -194,7 +196,7 @@ void HomePage::update(Ui &ui, float dt) {
     Page::update(ui, dt);
     if (s_.thumbnails != nullptr && s_.thumbnails->generation() != thumbs_gen_) {  // new thumbnails
         thumbs_gen_ = s_.thumbnails->generation();
-        if (rail_mode_ == 1 && !recent_.empty()) {
+        if ((rail_mode_ == 1 && !recent_.empty()) || (rail_mode_ == 0 && !continue_.empty())) {
             const bool had = ui.has_focus_within(rail_);
             const size_t at = rail_->focused_index();
             show_rail(ui);
@@ -268,6 +270,18 @@ void HomePage::show_rail(Ui &) {
             t.tint = ui::tint_for(h.name);
             t.badge = extension_upper(h.name);
             const bool remote = h.path.find("://") != std::string::npos;
+            // A local video's thumbnail (the cache knows a file by its path, size and date).
+            struct stat st {};
+            if (!remote && s_.thumbnails != nullptr && platform::file_kind(h.name) == platform::FileKind::Video &&
+                ::stat(h.path.c_str(), &st) == 0) {
+                platform::FileEntry e;
+                e.name = h.name;
+                e.path = h.path;
+                e.kind = platform::FileKind::Video;
+                e.size = static_cast<uint64_t>(st.st_size);
+                e.modified_s = static_cast<int64_t>(st.st_mtime);
+                t.image_url = s_.thumbnails->get(e);
+            }
             t.subtitle = "From " + clock_text(h.position_ms) + (remote ? " · network" : "");
             if (h.length_ms > h.position_ms) t.corner = std::to_string((h.length_ms - h.position_ms + 59'999) / 60'000) + " min left";
             return std::make_unique<Tile>(t);
