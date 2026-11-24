@@ -55,6 +55,40 @@ class HomePage : public Page {
     wnk::ui::CollectionView *rail_ = nullptr;
 };
 
+// Browse tab: drives, then folders and files in a grid. Back goes up a folder.
+class BrowsePage : public Page {
+ public:
+    explicit BrowsePage(Services &services);
+    // Shows `folder` ("" for the drives), then focuses the entry at `focus_path` if given.
+    void open(wnk::ui::Ui &ui, const std::string &folder, const std::string &focus_path = {}, bool take_focus = false);
+    bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
+    void update(wnk::ui::Ui &ui, float dt) override;
+    void on_shown(wnk::ui::Ui &ui) override;
+
+ private:
+    void show_volumes(wnk::ui::Ui &ui, const std::string &focus_path = {});
+    void show_entries(wnk::ui::Ui &ui, std::vector<wnk::platform::FileEntry> entries, const std::string &error,
+                      const std::string &focus_path);
+    void place_focus(wnk::ui::Ui &ui, const std::string &focus_path);
+    void set_crumbs(const std::string &folder);
+    const wnk::platform::RemovableVolume *volume_of(const std::string &path) const;
+    void activate(wnk::ui::Ui &ui, size_t index);
+
+    Services &s_;
+    wnk::async::Lifetime lifetime_;
+    wnk::async::CancellationSource listing_;
+    std::vector<wnk::platform::RemovableVolume> volumes_;
+    std::vector<wnk::platform::FileEntry> entries_;
+    std::string folder_;  // empty: the list of drives
+    float poll_ = 0;
+    bool started_ = false;
+    bool want_focus_ = false;  // move focus into the grid when the listing arrives (browse_to)
+    wnk::ui::Row *crumbs_ = nullptr;
+    wnk::ui::Label *count_ = nullptr;
+    wnk::ui::Label *message_ = nullptr;
+    wnk::ui::CollectionView *grid_ = nullptr;
+};
+
 // A tab whose feature has not been built yet: says what it will do.
 class PlaceholderPage : public Page {
  public:

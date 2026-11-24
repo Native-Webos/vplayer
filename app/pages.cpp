@@ -224,6 +224,222 @@ void HomePage::show_recent(Ui &, std::vector<platform::FileEntry> files) {
     WNK_LOGI(kCat, "home ready: %zu drives, %zu recent videos", volumes_.size(), recent_.size());
 }
 
+// ==== BrowsePage =====================================================================================
+
+BrowsePage::BrowsePage(Services &services) : s_(services) {
+    name = "page.browse";
+    auto &col = add<Column>(24);
+
+    auto &header = col.add<Row>(12);
+    header.set_height(Dim::fixed(52));
+    crumbs_ = &header.add<Row>(10);
+    crumbs_->set_align(Align::Start, Align::Center);
+    header.add<View>().set_width(Dim::fill());
+    count_ = &header.add<Label>("");
+    count_->set_font_size(20);
+    count_->set_muted(true);
+    count_->set_align(Align::End, Align::Center);
+
+    auto &body = col.add<View>();
+    body.set_height(Dim::fill());
+    grid_ = &body.add<CollectionView>(Axis::Vertical, 5, Size{metric::tile_w, metric::tile_h}, metric::tile_gap);
+    grid_->set_content_padding(Insets{12, 20, 12, 12});
+    grid_->name = "browse.grid";
+    grid_->on_activate = [this](Ui &ui, size_t i) { activate(ui, i); };
+    message_ = &body.add<Label>("");
+    message_->set_font_size(24);
+    message_->set_muted(true);
+    message_->set_max_lines(3);
+    message_->set_text_align(Align::Center);
+    message_->set_align(Align::Center, Align::Center);
+    message_->set_visible(false);
+}
+
+void BrowsePage::on_shown(Ui &ui) {
+    if (!started_ || folder_.empty()) {
+        started_ = true;
+        show_volumes(ui);
+    }
+}
+
+void BrowsePage::update(Ui &ui, float dt) {
+    Page::update(ui, dt);
+    poll_ += dt;
+    if (poll_ < kPollSeconds) return;
+    poll_ = 0;
+    auto vols = media_volumes();
+    if (same_volumes(vols, volumes_)) return;
+    if (folder_.empty()) {
+        show_volumes(ui);
+    } else {
+        volumes_ = std::move(vols);
+        if (volume_of(folder_) == nullptr) {
+            ui.toast("The drive was removed.");
+            open(ui, "");
+        }
+    }
+}
+
+const platform::RemovableVolume *BrowsePage::volume_of(const std::string &path) const {
+    const platform::RemovableVolume *best = nullptr;
+    for (const auto &v : volumes_) {
+        if (path.compare(0, v.path.size(), v.path) != 0) continue;
+        if (path.size() != v.path.size() && path[v.path.size()] != '/') continue;
+        if (best == nullptr || v.path.size() > best->path.size()) best = &v;
+    }
+    return best;
+}
+
+void BrowsePage::set_crumbs(const std::string &folder) {
+    crumbs_->clear_children();
+    auto chevron = [this] {
+        auto &c = crumbs_->add<ImageView>(ui::icon("chevron-right"));
+        c.set_size(22, 22);
+        c.set_fit(ImageFit::Contain);
+        c.set_align(Align::Start, Align::Center);
+    };
+    auto crumb = [this](const std::string &text, bool last) {
+        auto &c = crumbs_->add<Chip>(text, last ? ui::Color::hex(0x2A2A31FF) : col::surface, 21, last);
+        c.set_color(last ? col::text : col::text_soft);
+        c.set_align(Align::Start, Align::Center);
+    };
+    const auto *vol = volume_of(folder);
+    crumb("USB drives", folder.empty() || vol == nullptr);
+    if (folder.empty() || vol == nullptr) return;
+    std::vector<std::string> parts{vol->name};
+    std::string rest = folder.substr(vol->path.size());
+    size_t start = 0;
+    while (start < rest.size()) {
+        size_t slash = rest.find('/', start);
+        if (slash == std::string::npos) slash = rest.size();
+        if (slash > start) parts.push_back(rest.substr(start, slash - start));
+        start = slash + 1;
+    }
+    // Deep folders: keep the drive and the last two levels.
+    if (parts.size() > 3) parts.erase(parts.begin() + 1, parts.end() - 2), parts.insert(parts.begin() + 1, "…");
+    for (size_t i = 0; i < parts.size(); ++i) {
+        chevron();
+        crumb(parts[i], i + 1 == parts.size());
+    }
+}
+
+void BrowsePage::open(Ui &ui, const std::string &folder, const std::string &focus_path, bool take_focus) {
+    started_ = true;
+    want_focus_ = want_focus_ || take_focus;
+    listing_.cancel();
+    listing_ = wnk::async::CancellationSource();
+    if (folder.empty()) {
+        show_volumes(ui, focus_path);
+        return;
+    }
+    if (volumes_.empty()) volumes_ = media_volumes();
+    folder_ = folder;
+    set_crumbs(folder_);
+    count_->set_text("Loading…");
+    wnk::async::run_then_post<std::pair<std::vector<platform::FileEntry>, std::string>>(
+        s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), listing_.token(),
+        [folder](const wnk::async::CancellationToken &) {
+            std::pair<std::vector<platform::FileEntry>, std::string> r;
+            platform::list_folder(folder, &r.first, &r.second);
+            return r;
+        },
+        [this, focus_path](std::pair<std::vector<platform::FileEntry>, std::string> r) {
+            show_entries(s_.ctx->ui(), std::move(r.first), r.second, focus_path);
+        });
+}
+
+void BrowsePage::show_volumes(Ui &ui, const std::string &focus_path) {
+    folder_.clear();
+    entries_.clear();
+    volumes_ = media_volumes();
+    set_crumbs("");
+    count_->set_text(volumes_.size() == 1 ? "1 drive" : std::to_string(volumes_.size()) + " drives");
+    grid_->set_items(volumes_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
+        const auto &v = volumes_[i];
+        TileSpec t;
+        t.title = v.name;
+        t.subtitle = volume_detail(v);
+        t.icon_url = ui::icon("usb");
+        return std::make_unique<Tile>(t);
+    });
+    message_->set_text("No USB drive is connected.\nPlug one into the TV and it shows up here.");
+    message_->set_visible(volumes_.empty());
+    place_focus(ui, focus_path);
+}
+
+void BrowsePage::show_entries(Ui &ui, std::vector<platform::FileEntry> entries, const std::string &error,
+                              const std::string &focus_path) {
+    entries_ = std::move(entries);
+    const size_t n = entries_.size();
+    count_->set_text(n == 1 ? "1 item" : std::to_string(n) + " items");
+    grid_->set_items(n, [this](Ui &, size_t i) -> std::unique_ptr<View> {
+        return std::make_unique<Tile>(entry_tile(entries_[i]));
+    });
+    if (!error.empty()) {
+        message_->set_text("This folder cannot be read.\n" + error);
+    } else {
+        message_->set_text("This folder is empty.");
+    }
+    message_->set_visible(n == 0);
+    place_focus(ui, focus_path);
+    WNK_LOGI(kCat, "browse %s: %zu entries%s%s", folder_.c_str(), n, error.empty() ? "" : ", error: ",
+             error.c_str());
+}
+
+void BrowsePage::place_focus(Ui &ui, const std::string &focus_path) {
+    if (grid_->count() == 0) return;
+    if (!want_focus_ && !ui.has_focus_within(this)) return;
+    want_focus_ = false;
+    size_t index = 0;
+    if (!focus_path.empty()) {
+        if (folder_.empty()) {
+            for (size_t i = 0; i < volumes_.size(); ++i)
+                if (volumes_[i].path == focus_path) index = i;
+        } else {
+            for (size_t i = 0; i < entries_.size(); ++i)
+                if (entries_[i].path == focus_path) index = i;
+        }
+    }
+    grid_->focus_index(ui, index);
+}
+
+void BrowsePage::activate(Ui &ui, size_t i) {
+    if (folder_.empty()) {
+        if (i < volumes_.size()) open(ui, volumes_[i].path, {}, true);
+        return;
+    }
+    if (i >= entries_.size()) return;
+    const auto e = entries_[i];
+    switch (e.kind) {
+        case platform::FileKind::Folder: open(ui, e.path, {}, true); break;
+        case platform::FileKind::Video:
+        case platform::FileKind::Audio:
+        case platform::FileKind::Playlist: s_.play(e); break;
+        case platform::FileKind::Subtitle:
+            ui.toast("Subtitle files are used automatically when the video next to them plays.");
+            break;
+        default:
+            if (is_disc_image(e)) {
+                s_.play(e);
+            } else {
+                ui.toast("VPlayer cannot open this kind of file yet.");
+            }
+            break;
+    }
+}
+
+bool BrowsePage::on_action(Ui &ui, const input::ActionEvent &e) {
+    if (e.action != input::Action::Back || folder_.empty()) return Page::on_action(ui, e);
+    if (e.phase != input::Phase::Press) return true;
+    const auto *vol = volume_of(folder_);
+    if (vol == nullptr || folder_ == vol->path) {
+        open(ui, "", vol ? vol->path : std::string(), true);
+    } else {
+        open(ui, parent_of(folder_), folder_, true);
+    }
+    return true;
+}
+
 // ==== PlaceholderPage ================================================================================
 
 PlaceholderPage::PlaceholderPage(const std::string &icon_url, const std::string &title, const std::string &body) {
