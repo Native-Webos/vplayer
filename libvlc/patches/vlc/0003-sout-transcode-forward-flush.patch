@@ -1,0 +1,37 @@
+diff --git a/modules/stream_out/transcode/transcode.c b/modules/stream_out/transcode/transcode.c
+index 0c3fe91..23a02b4 100644
+--- a/modules/stream_out/transcode/transcode.c
++++ b/modules/stream_out/transcode/transcode.c
+@@ -233,6 +233,7 @@ static const char *const ppsz_sout_options[] = {
+ static sout_stream_id_sys_t *Add( sout_stream_t *, const es_format_t * );
+ static void              Del ( sout_stream_t *, sout_stream_id_sys_t * );
+ static int               Send( sout_stream_t *, sout_stream_id_sys_t *, block_t* );
++static void              Flush( sout_stream_t *, sout_stream_id_sys_t * );
+ 
+ /*****************************************************************************
+  * Open:
+@@ -422,6 +423,7 @@ static int Open( vlc_object_t *p_this )
+     p_stream->pf_add    = Add;
+     p_stream->pf_del    = Del;
+     p_stream->pf_send   = Send;
++    p_stream->pf_flush  = Flush;
+     p_stream->p_sys     = p_sys;
+ 
+     return VLC_SUCCESS;
+@@ -551,6 +553,16 @@ error:
+     return NULL;
+ }
+ 
++/* A seek or a stream change upstream: drop what the decoder holds and pass the flush on, so the
++ * next stream output knows where the new data starts (VLC 3 does not, VLC 4 does). */
++static void Flush( sout_stream_t *p_stream, sout_stream_id_sys_t *id )
++{
++    if( id->b_transcode && id->p_decoder->pf_flush )
++        id->p_decoder->pf_flush( id->p_decoder );
++    if( id->id )
++        sout_StreamFlush( p_stream->p_next, id->id );
++}
++
+ static void Del( sout_stream_t *p_stream, sout_stream_id_sys_t *id )
+ {
+     if( id->b_transcode )
