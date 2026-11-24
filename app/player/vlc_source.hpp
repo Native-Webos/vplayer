@@ -45,6 +45,7 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -82,6 +83,8 @@ class VlcSource final : public wnk::media::MediaSource {
     void set_force_pcm(bool on) { force_pcm_.store(on); }
     // VLC's audio filters on the way to the TV (decoded PCM then), from the next select().
     void set_audio_effects(const AudioEffects &fx) { effects_ = fx; }
+    // The audio track open() marks as the default: the first whose language this accepts (else the first).
+    void set_audio_preference(std::function<bool(const std::string &)> accept) { prefer_audio_ = std::move(accept); }
     // CEA-608 closed captions found in the video (the first packets are looked at), and drawing
     // them as subtitle track kClosedCaptionsTrack instead of libVLC's subtitles.
     static constexpr int kClosedCaptionsTrack = 9990;
@@ -178,6 +181,7 @@ class VlcSource final : public wnk::media::MediaSource {
     std::atomic<bool> force_pcm_{false};
     std::atomic<bool> subrip_all_ass_{false};
     AudioEffects effects_;  // set before open (controller threads read it in select)
+    std::function<bool(const std::string &)> prefer_audio_;  // set before open
     int stray_id_ = -1;     // a wanted kind offered under another id (mu_); see on_add
     // Closed captions (mu_): found, being drawn, and the access units' pairs reordered by time.
     bool cc_seen_ = false, cc_on_ = false;

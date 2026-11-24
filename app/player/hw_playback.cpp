@@ -64,6 +64,7 @@ class HwPlayback final : public Playback {
         auto source = std::make_unique<VlcSource>(vlc, std::move(vlc_options));
         source->set_force_pcm(options.force_pcm);
         source->set_audio_effects(effects);
+        source->set_audio_preference(options.prefer_audio);
         source_ = source.get();  // owned by the controller, which outlives every use here
         controller_ = std::make_unique<media::PlaybackController>(std::move(source), std::move(backend), main, po);
         controller_->set_state_callback([this](media::PlayState from, media::PlayState to,

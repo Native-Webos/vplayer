@@ -19,6 +19,7 @@
 
 #include "wnk/async/async.hpp"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +37,9 @@ struct HwOptions {
     bool dolby_vision = false;
     bool atmos = false;
     bool force_pcm = false;  // Settings: audio always decoded to PCM for the TV
+    // Settings: the audio track to play when the file has one in this language (given a track's
+    // language tag); empty: the file's first audio track.
+    std::function<bool(const std::string &)> prefer_audio;
 };
 
 // Whether this device has a hardware decoder the kit can drive (Starfish or NDL). Cached.

@@ -284,10 +284,18 @@ class App : public wnk::app::Delegate {
             base.push_back(":no-bluray-menu");
             base.push_back(":no-dvdnav-menu");
         }
+        // Settings: languages. VLC picks the subtitle track ("any": the first one) on both paths,
+        // and the audio track on the software path; the TV decoder path is told below.
+        if (!settings_.subtitle_language.empty()) base.push_back(":sub-language=" + settings_.subtitle_language);
+        if (!settings_.audio_language.empty()) base.push_back(":audio-language=" + settings_.audio_language);
         if (hw) {
             WNK_LOGI(kCat, "engine: hardware (TV decoder) for %s", e.name.c_str());
             auto hw = hw_;
             hw.force_pcm = settings_.audio_pcm;
+            if (!settings_.audio_language.empty())
+                hw.prefer_audio = [code = settings_.audio_language](const std::string &lang) {
+                    return vplayer::language_matches(lang, code);
+                };
             return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw, base, effects);
         }
         if (engine_) {
@@ -369,6 +377,8 @@ class App : public wnk::app::Delegate {
         if (auto it = j.find("at"); it != j.end() && it->is_number()) pending_at_ms_ = static_cast<int64_t>(it->get<double>() * 1000);
         // {"decoder": "software" | "hardware"}: force an engine for the next plays (testing).
         if (auto it = j.find("decoder"); it != j.end() && it->is_string()) decoder_ = it->get<std::string>();
+        // {"settings": true}: open Settings (for checking it on a TV without a remote).
+        if (auto it = j.find("settings"); it != j.end() && it->is_boolean() && it->get<bool>()) show_settings(ctx.ui());
         // {"panel": "audio" | "subtitles" | "video" | "playback" | "info"}: open the player's panel on
         // that tab once the file plays (with "play"; for checking the panel on a TV without a remote).
         if (auto it = j.find("panel"); it != j.end() && it->is_string()) {
@@ -454,6 +464,26 @@ class App : public wnk::app::Delegate {
                                            settings_.audio_pcm = i == 1;
                                            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
                                        });
+        // Languages: the audio track, and whether (and which) subtitles start on.
+        const auto &langs = vplayer::languages();
+        std::vector<std::string> audio_names{"As the file says"}, sub_names{"As the file says", "Always on (first track)"};
+        int audio_at = 0, sub_at = settings_.subtitle_language == "any" ? 1 : 0;
+        for (size_t i = 0; i < langs.size(); ++i) {
+            audio_names.push_back(langs[i].name);
+            sub_names.push_back(langs[i].name);
+            if (settings_.audio_language == langs[i].code) audio_at = static_cast<int>(i) + 1;
+            if (settings_.subtitle_language == langs[i].code) sub_at = static_cast<int>(i) + 2;
+        }
+        d->body().add<wnk::ui::Choice>("Audio language", audio_names, audio_at, [this](Ui &, int i) {
+            settings_.audio_language = i == 0 ? std::string() : vplayer::languages()[static_cast<size_t>(i - 1)].code;
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        d->body().add<wnk::ui::Choice>("Subtitles", sub_names, sub_at, [this](Ui &, int i) {
+            settings_.subtitle_language = i == 0   ? std::string()
+                                          : i == 1 ? std::string("any")
+                                                   : vplayer::languages()[static_cast<size_t>(i - 2)].code;
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
         d->add_button("About VPlayer", [this](Ui &u) { show_about(u); });
         d->add_button("Close");
         ui.show_dialog(std::move(d));

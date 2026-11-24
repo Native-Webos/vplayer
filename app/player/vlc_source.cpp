@@ -282,6 +282,17 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         info_.tracks.push_back(std::move(ti));
     }
     if (n > 0) libvlc_media_tracks_release(tracks, n);
+    // Settings: the preferred language's audio track plays, when the file has one.
+    if (prefer_audio_) {
+        auto it = std::find_if(info_.tracks.begin(), info_.tracks.end(), [this](const media::TrackInfo &t) {
+            return t.type == media::TrackType::Audio && prefer_audio_(t.language);
+        });
+        if (it != info_.tracks.end()) {
+            for (auto &t : info_.tracks)
+                if (t.type == media::TrackType::Audio) t.is_default = &t == &*it;
+            WNK_LOGI(kCat, "audio track %d (%s): the preferred language", it->index, it->language.c_str());
+        }
+    }
     // Styled subtitles' fonts: libVLC does not hand out attachments, so they are read from the file.
     const bool ass = std::any_of(info_.tracks.begin(), info_.tracks.end(), [](const media::TrackInfo &t) {
         return t.type == media::TrackType::Subtitle && t.codec_label == "ssa";
