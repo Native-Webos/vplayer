@@ -273,3 +273,27 @@ Driven with `app/tools/tv-keys.sh` (real remote events), on H.264 + AAC/AC-3 MKV
   60 fps (3x and 4x of 25 fps); the player then says so and shows the speed actually playing.
 - Chapters: libVLC's player reads them (Matroska, MP4, DVD...) even when it only demuxes for the
   bridge. Choosing one goes through the controller's seek (the keyframe at or before its start).
+
+## 16. Network, history and the remaining subtitle formats (host, 2026-11-24) [dev]
+
+Built and tested on the host only (the TV run comes later):
+
+- SMB: VLC 3.0.24's `smb2` module with libsmb2 (selected by hand in contribs.sh: off by default on
+  Linux). libdsm (SMB1, NetBIOS discovery) does not build against glibc 2.12's headers (`struct
+  timespec` defined twice); SMB1 is off by default on current Windows and NAS systems anyway.
+- Network browsing is libVLC's: its LAN discoverers (UPnP, mDNS) give servers; parsing a location
+  with `libvlc_media_parse_network | libvlc_media_do_interact` gives the folder as sub-items. Sign-in
+  comes through `libvlc_dialog_set_callbacks` and is shown with the kit's text fields; "remember"
+  stores it in libVLC's keystore (file_keystore is in the build).
+- Resume points and history: one JSON list in the kit's key/value store (DB8 on the TV, which needs
+  `database.operation`), read on the engine's worker at start, written on workers with a generation
+  check so an older save never overwrites a newer one.
+- Fonts for styled ASS: Matroska attachments, read by the app (libVLC does not hand them out),
+  from the Segment's first children or through the SeekHead (FFmpeg writes them at the end).
+- DVB subtitles: decoded by the app like PGS and DVD. FFmpeg 6 ends full 8-bit lines with `00 F0`
+  (one zero short of the end code); accepted. An FFmpeg-encoded stream decodes pixel-identical to
+  the PGS it was made from.
+- Software path: full-range 4:2:0 (J420, phones and cameras) is now taken as it is instead of
+  having VLC convert its range with swscale for every picture, one suspect for §10's dropped frames;
+  a 5-second log line (pictures handed over, longest gap, VLC's shown/lost/decoded) is there to find
+  the rest on the TV.

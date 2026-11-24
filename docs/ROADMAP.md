@@ -83,9 +83,14 @@ release and date.
 - [ ] Settings → Decoder: Automatic / Hardware / Software (today: the `"decoder"` launch parameter)
 
 ## P3: VLC's sources
-- [ ] Services discovery: UPnP/DLNA, SMB, NFS, SFTP, FTP, mDNS; saved servers with credentials (SecretStore)
-- [ ] Network streams, M3U/XSPF playlists, IPTV lists
-- [ ] Media library: scan USB/shares, posters/thumbnails (`libvlc_media_thumbnail` or snapshots), resume points
+- [x] Network tab (RESEARCH.md §16): servers found by libVLC (UPnP/DLNA, mDNS), servers added by
+      address (SMB2/3, NFS, FTP, SFTP, WebDAV), folders through libVLC, sign-in through libVLC's dialogs
+      (credentials in its keystore), open a stream by address, recent addresses. Host-tested only
+- [x] SMB2/3 in the libVLC build (smb2 module, libsmb2); SMB1/NetBIOS (libdsm) not buildable on glibc 2.12
+- [x] Resume points and "Continue watching" on Home; Settings: decoder, resume. Host-tested only
+- [ ] On the TV: discovery, an SMB share with a password, a DLNA server, an HLS stream
+- [ ] M3U/XSPF playlists, IPTV lists (Playlists tab)
+- [ ] Media library: posters/thumbnails (`libvlc_media_thumbnail` or snapshots)
 
 ## P4: player feature parity
 - [x] Player bar: previous/next file in the folder (queue = the folder's videos/audio/disc images),
@@ -99,9 +104,9 @@ release and date.
       chapters), Info (file, streams, frames shown/dropped, input bitrate; refreshed every second)
 - [x] On the TV 2026-11-24: Subtitles tab lists the sidecar SRT; Info tab shows HEVC 3840×2160 24 fps
       and TrueHD 8 ch for thd-20s.mkv, and 203 shown / 66 dropped for MPEG-4 720p (the P1 drop issue)
-- [ ] Remote interaction on the TV (pause, seek, every panel control): host-verified only
+- [x] Remote interaction on the TV (pause, seek, panels) with app/tools/tv-keys.sh (RESEARCH.md §13)
 - [ ] Titles (DVD/Blu-ray), teletext pages, subtitle text size and colour, audio passthrough choice,
-      snapshot, "jump to time", playback history/resume
+      snapshot, "jump to time"
 - [ ] DVD/Blu-ray ISO and folders with menus (software path)
 - [ ] Video: aspect, crop, zoom, deinterlace, adjust; audio: equalizer, normalize, stereo mode
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)
