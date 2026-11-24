@@ -19,9 +19,11 @@ include("${_kit}/cmake/WnkApp.cmake")
 
 add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
-        player/player_screen.cpp)
-target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(vplayer PRIVATE wnk_app)
+        player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp)
+# ../modules: the wnk_bridge contract (wnk_bridge/wnk_bridge.h) shared with our VLC stream output.
+target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../modules")
+# The kit's playback controller and the TV's decoders (Starfish, NDL; dlopened, never DT_NEEDED).
+target_link_libraries(vplayer PRIVATE wnk_app wnk_media wnk_media_starfish wnk_media_ndl)
 target_include_directories(vplayer SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")  # nlohmann/json.hpp
 
 # libVLC, cross-built by ../libvlc/build.sh: headers in its stage, the stripped runtime (libvlc,

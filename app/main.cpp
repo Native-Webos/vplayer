@@ -8,6 +8,7 @@
 // on a worker while the UI comes up; Settings shows what it reported.
 #include "library.hpp"
 #include "pages.hpp"
+#include "player/hw_playback.hpp"
 #include "player/player_screen.hpp"
 #include "ui/theme.hpp"
 #include "vlc_engine.hpp"
@@ -15,6 +16,7 @@
 #include "wnk/app/app.hpp"
 #include "wnk/async/async.hpp"
 #include "wnk/log.hpp"
+#include "wnk/media/device_caps.hpp"
 #include "wnk/ui/navigation.hpp"
 #include "wnk/ui/widgets.hpp"
 
@@ -37,6 +39,9 @@ constexpr const char *kCat = "vplayer";
 struct EngineResult {
     std::shared_ptr<vplayer::VlcEngine> engine;
     vplayer::VlcInfo info;
+    vplayer::HwOptions hw;   // what the TV says it supports (Dolby Vision, Atmos)
+    bool hw_available = false;
+    std::string hw_why;
 };
 
 class MainScreen : public Screen {
@@ -167,11 +172,23 @@ class App : public wnk::app::Delegate {
             [app_dir](const wnk::async::CancellationToken &) {
                 EngineResult r;
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info);
+                // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
+                r.hw_available = vplayer::hw_playback_available(&r.hw_why);
+                if (r.hw_available) {
+                    const auto caps = wnk::media::DeviceMediaCaps::detect();
+                    r.hw.dolby_vision = caps.dolby_vision == true;
+                    r.hw.atmos = caps.dolby_atmos == true;
+                }
                 return r;
             },
             [this, &ctx](EngineResult r) {
                 engine_ = std::move(r.engine);
                 vlc_info_ = std::move(r.info);
+                hw_ = r.hw;
+                hw_available_ = r.hw_available;
+                WNK_LOGI(kCat, "hardware decoding: %s%s (Dolby Vision %s, Atmos %s)", r.hw_available ? "yes" : "no",
+                         r.hw_available ? "" : (", " + r.hw_why).c_str(), r.hw.dolby_vision ? "yes" : "no",
+                         r.hw.atmos ? "yes" : "no");
                 if (pending_play_) {  // a {"play": ...} launch waited for the engine
                     auto e = *pending_play_;
                     pending_play_.reset();
@@ -191,9 +208,20 @@ class App : public wnk::app::Delegate {
     }
 
  private:
-    // A player for one file: libVLC when this build has it, else the demo engine (host builds).
-    std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e) {
-        if (engine_) return vplayer::open_vlc_playback(engine_->instance(), e.path, vlc_options_);
+    // A player for one file: on the TV the hardware path (libVLC demuxes, the TV decodes) for video
+    // unless `software` or the "decoder" launch parameter says otherwise; libVLC's own decoders for
+    // the rest; the demo engine in host builds without libVLC.
+    std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e, bool software) {
+        const bool audio_only = e.kind == wnk::platform::FileKind::Audio;
+        const bool hw = engine_ && hw_available_ && !software && !audio_only && decoder_ != "software";
+        if (hw) {
+            WNK_LOGI(kCat, "engine: hardware (TV decoder) for %s", e.name.c_str());
+            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw_, vlc_options_);
+        }
+        if (engine_) {
+            WNK_LOGI(kCat, "engine: software (libVLC) for %s", e.name.c_str());
+            return vplayer::open_vlc_playback(engine_->instance(), e.path, vlc_options_);
+        }
         if (vlc_info_ && !vlc_info_->available) return vplayer::open_demo_playback();
         return nullptr;
     }
@@ -224,11 +252,15 @@ class App : public wnk::app::Delegate {
             queue.assign(1, e);
             index = 0;
         }
+        // A player already open (a relaunch with "play", or a file opened from elsewhere) is replaced.
+        if (auto *open_player = dynamic_cast<vplayer::PlayerScreen *>(nav_->top())) open_player->close(ui);
         auto player = std::make_unique<vplayer::PlayerScreen>(
-            services_, *nav_, [this](const wnk::platform::FileEntry &f) { return open_playback(f); }, std::move(queue),
+            services_, *nav_, [this](const wnk::platform::FileEntry &f, bool sw) { return open_playback(f, sw); }, std::move(queue),
             index);
         if (pending_panel_ >= 0) player->open_panel_when_playing(pending_panel_);
+        if (pending_at_ms_ >= 0) player->start_at(pending_at_ms_);
         pending_panel_ = -1;
+        pending_at_ms_ = -1;
         nav_->push(ui, std::move(player));
     }
 
@@ -243,6 +275,10 @@ class App : public wnk::app::Delegate {
             for (const auto &o : *it)
                 if (o.is_string()) vlc_options_.push_back(o.get<std::string>());
         }
+        // {"at": seconds}: start the "play" file there.
+        if (auto it = j.find("at"); it != j.end() && it->is_number()) pending_at_ms_ = static_cast<int64_t>(it->get<double>() * 1000);
+        // {"decoder": "software" | "hardware"}: force an engine for the next plays (testing).
+        if (auto it = j.find("decoder"); it != j.end() && it->is_string()) decoder_ = it->get<std::string>();
         // {"panel": "audio" | "subtitles" | "video" | "playback" | "info"}: open the player's panel on
         // that tab once the file plays (with "play"; for checking the panel on a TV without a remote).
         if (auto it = j.find("panel"); it != j.end() && it->is_string()) {
@@ -294,6 +330,10 @@ class App : public wnk::app::Delegate {
     std::optional<wnk::platform::FileEntry> pending_play_;
     std::vector<std::string> vlc_options_;
     int pending_panel_ = -1;
+    vplayer::HwOptions hw_;
+    bool hw_available_ = false;
+    std::string decoder_ = "auto";
+    int64_t pending_at_ms_ = -1;
 };
 
 }  // namespace

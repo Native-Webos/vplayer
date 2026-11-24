@@ -10,3 +10,4 @@ librt.so.1          # glibc 2.12 keeps clock_gettime here
 libGLESv2.so.2      # firmware GLES2, same SONAME on every inventoried release
 libSDL2-2.0.so.0    # bundled SDL-webOS 2.30.12, lib/ via RPATH $ORIGIN/lib
 libvlc.so.5?        # bundled libVLC 3.0.24, lib/ via RPATH $ORIGIN/lib (absent in a build without it)
+libgcc_s.so.1?      # the kit's Dolby Vision RPU code (Rust libdovi) unwinds through it; every firmware 1.2-11.2 (kit fw-lib-matrix)
