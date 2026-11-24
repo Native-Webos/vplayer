@@ -17,7 +17,8 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp)
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp)
+target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(vplayer PRIVATE wnk_app)
 target_include_directories(vplayer SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")  # nlohmann/json.hpp
 
@@ -41,9 +42,13 @@ elseif (WNK_WEBOS)
     message(WARNING "vplayer: no libVLC at ${VPLAYER_LIBVLC_DIR} (run ../libvlc/build.sh); building without it")
 endif ()
 
-# Fonts (Atkinson Hyperlegible, OFL) live in fonts/ next to the executable, on the host and in the ipk.
+# Fonts (Inter, OFL: assets/fonts/OFL.txt) and the SVG icons live in fonts/ and icons/ next to the
+# executable, on the host and in the ipk.
+set(VPLAYER_FONT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts")
+set(VPLAYER_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons")
 add_custom_command(TARGET vplayer POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${WNK_FONT_DIR}" "$<TARGET_FILE_DIR:vplayer>/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${VPLAYER_FONT_DIR}" "$<TARGET_FILE_DIR:vplayer>/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${VPLAYER_ICON_DIR}" "$<TARGET_FILE_DIR:vplayer>/icons"
         VERBATIM)
 
 wnk_add_webos_package(
@@ -56,8 +61,8 @@ wnk_add_webos_package(
         LARGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/largeIcon.png"
         ICON_COLOR "#e85d04"
         EXPECTED_NEEDED "${CMAKE_CURRENT_SOURCE_DIR}/expected-needed.txt"
-        EXTRA_DIRS "${WNK_FONT_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
+        EXTRA_DIRS "${VPLAYER_FONT_DIR}" "${VPLAYER_ICON_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
 
-# Host smoke test: the engine reports (a stub on the host), then Back twice at the root quits.
+# Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.
 wnk_add_app_test(NAME e2e.vplayer.starts_and_quits TARGET vplayer PREFIX APP_VPLAYER
-        KEYS "Escape,Escape" PASS "has no libVLC")
+        KEYS "wait@800,Escape,Escape" PASS "home ready")
