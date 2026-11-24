@@ -24,7 +24,8 @@ how to test it, what should happen, and what the log shows.
 | 1.1 | Install the new package | Installs; `database.operation` is asked for in appinfo.json | — |
 | 1.2 | Start the app | Home appears; the key/value store is DB8 | `storage.kv supported db8`, `[history] 0 entries` |
 | 1.3 | HTTP transport | libcurl found | `net.http supported` (and an http cache line) |
-| 1.4 | libVLC with SMB2 | starts as before; the smb2 plugin loads on first SMB use | `libVLC 3.0.24 … ready` |
+| 1.4 | libVLC with SMB2 and one merged FFmpeg plugin | starts as before (~430 → fewer modules); MKV/MP4/AVI still open | `libVLC 3.0.24 … ready` |
+| 1.5 | webOS 7–11 TVs (a C2, a G4), if available | The app starts and plays; kit's verify.sh says the package loads on 5.3–11.2 | — |
 
 ## 2. Settings
 
@@ -96,6 +97,18 @@ how to test it, what should happen, and what the log shows.
 | 7.3 | `dvb.ts` with Settings → Software | VLC's own DVB rendering, for comparison | — |
 | 7.4 | A real DVB recording (from a TV or set-top box) | Subtitles show and clear on time | — |
 | 7.5 | A real MKV with ASS and fonts (anime release) | Styled as authored | — |
+
+## 7b. Player additions (never run on the TV)
+
+| # | Test | Expected |
+|---|---|---|
+| 7b.1 | `subs-srt-ass.mkv`, English SRT track, at 0:06–0:12 | The `{\an8}` line is at the top (libass); other lines at the bottom |
+| 7b.2 | Settings → Subtitle size Huge, Subtitles on a dark box; SRT on both decoders | Bigger text on a box, on the TV decoder and in software |
+| 7b.3 | Video tab → aspect 4:3, 16:9, Stretch, Fill; zoom 150 % on the TV decoder | The picture's area changes; Fill and zoom past the edges (check Starfish accepts it) |
+| 7b.4 | Playback → Jump to time "0:30", "95", "1:75" | Jumps; the last says it is not a time |
+| 7b.5 | Playback → Add a bookmark here, twice at different places; restart the app | Both bookmarks listed and jump there |
+| 7b.6 | A DVD ISO and a Blu-ray ISO | Start at the main film, not the menu; Playback → Titles lists the rest (software path) |
+| 7b.7 | Top bar → search, type part of a file name with the remote's keyboard | Results as you type; one plays |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
 

@@ -75,7 +75,8 @@ release and date.
 - [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
 - [x] DVB subtitles on the hardware path (host-tested)
 - [ ] Teletext subtitles on the hardware path
-- [ ] SubRip `{\an8}` (top) placement on the hardware path
+- [x] SubRip `{\an8}` (top) placement and tag styling on the hardware path (libass; host-tested)
+- [x] Aspect ratio and zoom on the hardware path (the picture's rectangle on the video plane; host-tested)
 - [x] Speed on the hardware path: VLC decodes audio to PCM, the app time-stretches it (RESEARCH.md §15)
 - [x] Chapters on the hardware path: listed from libVLC, chosen through the controller's seek; on the TV 2026-11-24
 - [x] Dolby Vision declared to Starfish (RESEARCH.md §14): configuration record from MKV/MP4, or RPUs in
@@ -108,8 +109,9 @@ release and date.
 - [x] On the TV 2026-11-24: Subtitles tab lists the sidecar SRT; Info tab shows HEVC 3840×2160 24 fps
       and TrueHD 8 ch for thd-20s.mkv, and 203 shown / 66 dropped for MPEG-4 720p (the P1 drop issue)
 - [x] Remote interaction on the TV (pause, seek, panels) with app/tools/tv-keys.sh (RESEARCH.md §13)
-- [ ] Titles (DVD/Blu-ray), teletext pages, subtitle text size and colour, audio passthrough choice,
-      snapshot, "jump to time"
+- [x] Disc titles (software path), discs start at the main film; jump to time; bookmarks; subtitle
+      size and background (Settings); search. Host-tested
+- [ ] Teletext pages, subtitle colour, audio passthrough choice, snapshot
 - [ ] DVD/Blu-ray ISO and folders with menus (software path)
 - [ ] Video: aspect, crop, zoom, deinterlace, adjust; audio: equalizer, normalize, stereo mode
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)
@@ -117,7 +119,8 @@ release and date.
 
 ## P5: release
 - [ ] Final name and icon (not "VLC", see RESEARCH.md §6)
-- [ ] Strip and prune plugins; size budget. First win: `--enable-merge-ffmpeg` (FFmpeg is linked into
+- [x] `--enable-merge-ffmpeg`: runtime 114 → 88 MB, package 50.8 → 37.6 MB
+- [x] Firmware check (kit's verify.sh): loadable on webOS 5.3 to 11.2; plugins need glibc ≤ 2.12 only
+- [ ] Prune plugins further (each one is a VLC feature: decide per plugin). Was: (FFmpeg is linked into
       avcodec, avformat and avparser separately, ~41 MB of the 113 MB)
-- [ ] Firmware compatibility check with the kit's `fw-check.py` / `verify.sh`
 - [ ] webosbrew Homebrew Channel submission; GPL source release
