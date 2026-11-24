@@ -106,10 +106,10 @@ struct TileSpec {
     wnk::ui::ClickHandler on_menu;
 };
 
-// A grid whose items may have options: on those, OK opens the item when it is released, and holding
-// it (0.6 s) opens the options instead (has_menu says which items have them). Pointer clicks are a
-// quick press and release, so they open the item; the tile's "⋮" button takes the pointer's clicks for
-// the options.
+// A grid whose items may have options (has_menu says which): on those, a short OK opens the item when
+// it is released, and a long one (0.6 s) opens the options instead: a held key fires on its repeats,
+// a pointer's long click at its release (the press carries the time the button went down). The tile's
+// three-dots button takes the pointer's clicks for the options too.
 class MenuGrid : public wnk::ui::CollectionView {
  public:
     using CollectionView::CollectionView;
@@ -122,6 +122,7 @@ class MenuGrid : public wnk::ui::CollectionView {
  private:
     long held_ = -1;  // the item OK went down on, while it is held
     std::chrono::steady_clock::time_point held_since_{};
+    uint32_t pressed_ms_ = 0;  // the press's own time (a pointer click's press comes at its release)
     bool fired_ = false;  // the options opened for this hold
 };
 

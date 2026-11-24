@@ -147,6 +147,10 @@ class VlcSource final : public wnk::media::MediaSource {
     static void on_flush(void *opaque, void *id);
 
     bool start_player(std::string *error);
+
+    // No track from the parse (some live streams): the first video and audio VLC delivers.
+
+    void probe_tracks();
     void stop_player();
     std::string sout_chain() const;
     bool to_packet(Item &item, wnk::media::Packet *out);  // false: nothing to read from this item
@@ -182,6 +186,8 @@ class VlcSource final : public wnk::media::MediaSource {
     std::atomic<bool> subrip_all_ass_{false};
     AudioEffects effects_;  // set before open (controller threads read it in select)
     std::function<bool(const std::string &)> prefer_audio_;  // set before open
+    bool probing_ = false;                   // probe_tracks() running (mu_)
+    std::vector<wnk::media::TrackInfo> probed_;  // what it saw (mu_)
     int stray_id_ = -1;     // a wanted kind offered under another id (mu_); see on_add
     // Closed captions (mu_): found, being drawn, and the access units' pairs reordered by time.
     bool cc_seen_ = false, cc_on_ = false;

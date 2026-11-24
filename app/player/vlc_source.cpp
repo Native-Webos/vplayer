@@ -286,6 +286,9 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         info_.tracks.push_back(std::move(ti));
     }
     if (n > 0) libvlc_media_tracks_release(tracks, n);
+    // Some live streams (HLS from a Wowza "smil" playlist, ...) parse with no track: VLC's preparser
+    // stops before the segments. Start the stream briefly and take the tracks from what it delivers.
+    if (info_.tracks.empty() && url) probe_tracks();
     // Settings: the preferred language's audio track plays, when the file has one.
     if (prefer_audio_) {
         auto it = std::find_if(info_.tracks.begin(), info_.tracks.end(), [this](const media::TrackInfo &t) {
@@ -314,6 +317,35 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         return false;
     }
     return true;
+}
+
+void VlcSource::probe_tracks() {
+    const auto t0 = std::chrono::steady_clock::now();
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        probing_ = true;
+        probed_.clear();
+    }
+    want_video_ = want_audio_ = -1;
+    std::string err;
+    if (start_player(&err)) {
+        // Video within 15 s; then audio, a moment more (a stream may have none).
+        std::unique_lock<std::mutex> lock(mu_);
+        auto has = [this](media::TrackType t) {
+            return std::any_of(probed_.begin(), probed_.end(), [t](const media::TrackInfo &x) { return x.type == t; });
+        };
+        cv_.wait_for(lock, std::chrono::seconds(15), [&] { return interrupted_ || has(media::TrackType::Video); });
+        if (!interrupted_ && has(media::TrackType::Video))
+            cv_.wait_for(lock, std::chrono::milliseconds(1500), [&] { return interrupted_ || has(media::TrackType::Audio); });
+    }
+    stop_player();
+    std::lock_guard<std::mutex> lock(mu_);
+    probing_ = false;
+    info_.tracks = std::move(probed_);
+    probed_.clear();
+    WNK_LOGI(kCat, "probe: %zu track(s) from the stream itself in %lld ms", info_.tracks.size(),
+             static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        std::chrono::steady_clock::now() - t0).count()));
 }
 
 std::string VlcSource::sout_chain() const {
@@ -470,12 +502,12 @@ bool VlcSource::start_player(std::string *error) {
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway
     if (want_video_ >= 0) {
         libvlc_media_add_option(m, (":video-track-id=" + std::to_string(want_video_)).c_str());
-    } else {
+    } else if (!probing_) {  // a probe takes whatever VLC selects
         libvlc_media_add_option(m, ":no-sout-video");
     }
     if (want_audio_ >= 0) {
         libvlc_media_add_option(m, (":audio-track-id=" + std::to_string(want_audio_)).c_str());
-    } else {
+    } else if (!probing_) {
         libvlc_media_add_option(m, ":no-sout-audio");
     }
     for (const auto &o : options_) libvlc_media_add_option(m, o.c_str());
@@ -535,6 +567,34 @@ void VlcSource::stop_player() {
 void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
     auto *self = static_cast<VlcSource *>(opaque);
     std::lock_guard<std::mutex> lock(self->mu_);
+    if (self->probing_) {  // probe_tracks(): note the stream, take nothing
+        if (d->cat == WNK_ES_VIDEO || d->cat == WNK_ES_AUDIO) {
+            media::TrackInfo ti;
+            ti.index = d->es_id;
+            ti.codec = codec_of(d->codec);
+            ti.codec_label = fourcc_text(d->codec);
+            if (d->cat == WNK_ES_VIDEO) {
+                ti.type = media::TrackType::Video;
+                ti.width = static_cast<int>(d->visible_width ? d->visible_width : d->width);
+                ti.height = static_cast<int>(d->visible_height ? d->visible_height : d->height);
+                ti.frame_rate = d->fps_den ? static_cast<double>(d->fps_num) / d->fps_den : 0;
+            } else {
+                ti.type = media::TrackType::Audio;
+                ti.sample_rate = static_cast<int>(d->rate);
+                ti.channels = static_cast<int>(d->channels);
+                ti.decodable = true;
+                ti.ac3_encodable = true;
+            }
+            const bool have = std::any_of(self->probed_.begin(), self->probed_.end(),
+                                          [&](const media::TrackInfo &t) { return t.type == ti.type; });
+            if (!have) {
+                ti.is_default = true;
+                self->probed_.push_back(std::move(ti));
+                self->cv_.notify_all();
+            }
+        }
+        return nullptr;
+    }
     if (d->cat == WNK_ES_SUBTITLE) {
         auto &seen = self->seen_subtitles_[d->es_id];
         seen.codec = d->codec;
@@ -1162,6 +1222,7 @@ bool VlcSource::set_speed(double, std::string *why) {
 }
 bool VlcSource::stretch_audio(media::Packet *) { return false; }
 void VlcSource::land_seek_locked(int64_t) {}
+void VlcSource::probe_tracks() {}
 void VlcSource::commit_seek_gop_locked() {}
 libvlc_media_player_t *VlcSource::hold_player() const { return nullptr; }
 std::vector<VlcSource::SubtitleTrack> VlcSource::subtitle_tracks() const { return {}; }

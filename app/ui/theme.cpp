@@ -296,6 +296,7 @@ bool MenuGrid::on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) {
     if (e.phase == Phase::Press) {
         held_ = static_cast<long>(index);
         held_since_ = std::chrono::steady_clock::now();
+        pressed_ms_ = e.source.time_ms;
         fired_ = false;
         return true;
     }
@@ -307,10 +308,16 @@ bool MenuGrid::on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) {
         }
         return true;
     }
-    // Release: a short press opens the item; after a hold the options are open already.
-    const bool open = held_ == static_cast<long>(index) && !fired_;
+    // Release: a short press opens the item; after a hold the options are open already. A pointer's
+    // long click arrives whole at the release (press stamped with the time the button went down).
+    const bool mine = held_ == static_cast<long>(index) && !fired_;
+    const bool long_click = mine && pressed_ms_ != 0 && e.source.time_ms >= pressed_ms_ + 600;
     held_ = -1;
-    if (open && on_activate) on_activate(ui, index);
+    if (long_click) {
+        on_menu(ui, index);
+    } else if (mine && on_activate) {
+        on_activate(ui, index);
+    }
     return true;
 }
 
