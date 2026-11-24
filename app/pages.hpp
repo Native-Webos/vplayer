@@ -31,6 +31,7 @@ struct Services {
     std::vector<MyPlaylist> *my_playlists = nullptr;
     std::function<void()> save_my_playlists;
     class Thumbnails *thumbnails = nullptr;  // video thumbnails, once libVLC runs (thumbnails.hpp)
+    libvlc_instance_t *vlc = nullptr;        // once libVLC runs
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;

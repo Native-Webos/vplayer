@@ -46,3 +46,15 @@ TEST("covers") {
     CHECK_EQ(pick_cover({"/a/x.jpg", "/a/AlbumArtSmall.jpg"}), std::string("/a/AlbumArtSmall.jpg"));
     CHECK_EQ(pick_cover({"/a/front.png", "/a/cover.jpg"}), std::string("/a/cover.jpg"));
 }
+
+TEST("tag_order") {
+    std::vector<TrackTags> t(3);
+    t[0].number = 3;
+    t[1].number = 1;
+    t[2].number = 2;
+    CHECK(tag_order(t) == (std::vector<size_t>{1, 2, 0}));
+    t[2].number = 0;  // one untagged: the folder's order stays
+    CHECK(tag_order(t) == (std::vector<size_t>{0, 1, 2}));
+    CHECK(tag_order({}).empty());
+    CHECK(read_tags(nullptr, {"/a.mp3"}).size() == 1);
+}

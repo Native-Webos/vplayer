@@ -241,6 +241,7 @@ class App : public wnk::app::Delegate {
                     thumbnails_ = std::make_unique<vplayer::Thumbnails>(engine_->instance(), thumbnail_dir(ctx),
                                                                         ctx.dispatcher());
                     services_.thumbnails = thumbnails_.get();
+                    services_.vlc = engine_->instance();
                 }
                 WNK_LOGI(kCat, "hardware decoding: %s%s (Dolby Vision %s, Atmos %s)", r.hw_available ? "yes" : "no",
                          r.hw_available ? "" : (", " + r.hw_why).c_str(), r.hw.dolby_vision ? "yes" : "no",
@@ -261,6 +262,7 @@ class App : public wnk::app::Delegate {
     void on_stop(wnk::app::Context &) override {
         cancel_.cancel();
         services_.thumbnails = nullptr;
+        services_.vlc = nullptr;
         thumbnails_.reset();  // its thread uses libVLC: before the engine
         dialogs_.reset();
         engine_.reset();

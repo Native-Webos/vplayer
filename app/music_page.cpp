@@ -142,18 +142,48 @@ void MusicPage::show_album(Ui &ui, size_t index) {
     c.set_color(col::text);
     c.set_align(Align::Start, Align::Center);
     count_->set_text(std::to_string(a.tracks.size()) + (a.tracks.size() == 1 ? " track" : " tracks"));
+    tags_.assign(a.tracks.size(), TrackTags{});
+    order_.resize(a.tracks.size());
+    for (size_t k = 0; k < order_.size(); ++k) order_[k] = k;
+    // Titles, numbers and lengths from the tracks' tags, read on a worker (libVLC).
+    if (s_.vlc != nullptr) {
+        std::vector<std::string> paths;
+        for (const auto &tr : a.tracks) paths.push_back(tr.path);
+        const int which = album_;
+        wnk::async::run_then_post<std::vector<TrackTags>>(
+            s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
+            [vlc = s_.vlc, paths](const wnk::async::CancellationToken &) { return read_tags(vlc, paths); },
+            [this, which](std::vector<TrackTags> tags) {
+                if (album_ != which || tags.size() != tags_.size()) return;  // another album meanwhile
+                tags_ = std::move(tags);
+                order_ = tag_order(tags_);
+                Ui &u = s_.ctx->ui();
+                const bool had = u.has_focus_within(grid_);
+                const size_t at = grid_->focused_index();
+                show_tracks(u);
+                if (had) grid_->focus_index(u, at);
+            });
+    }
+    show_tracks(ui);
+    message_->set_visible(false);
+    grid_->focus_index(ui, 0);
+}
+
+void MusicPage::show_tracks(Ui &) {
+    const Album &a = albums_[static_cast<size_t>(album_)];
     grid_->set_items(a.tracks.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
         const Album &al = albums_[static_cast<size_t>(album_)];
-        const auto &tr = al.tracks[i];
+        const size_t k = order_[i];
+        const auto &tr = al.tracks[k];
+        const TrackTags &tg = tags_[k];
         TileSpec t;
-        t.title = display_name(tr.name);
-        t.subtitle = extension_upper(tr.name) + " · " + format_bytes(tr.size);
+        t.title = tg.title.empty() ? display_name(tr.name) : (tg.number > 0 ? std::to_string(tg.number) + ". " : "") + tg.title;
+        t.subtitle = tg.artist.empty() ? extension_upper(tr.name) + " · " + format_bytes(tr.size) : tg.artist;
+        if (tg.duration_ms > 0) t.corner = clock_text(tg.duration_ms);
         if (al.cover.empty()) t.icon_url = ui::icon("music"); else t.image_url = file_url(al.cover);
         t.tint = ui::tint_for(al.folder);
         return std::make_unique<Tile>(t);
     });
-    message_->set_visible(false);
-    grid_->focus_index(ui, 0);
 }
 
 void MusicPage::activate(Ui &ui, size_t i) {
@@ -169,8 +199,12 @@ void MusicPage::activate(Ui &ui, size_t i) {
         show_album(ui, i - 1);
         return;
     }
+    // The album in the order shown, from the track chosen.
     const Album &a = albums_[static_cast<size_t>(album_)];
-    if (i < a.tracks.size()) s_.play_queue(a.tracks, i);
+    if (i >= a.tracks.size()) return;
+    std::vector<platform::FileEntry> queue;
+    for (const size_t k : order_) queue.push_back(a.tracks[k]);
+    s_.play_queue(std::move(queue), i);
 }
 
 bool MusicPage::on_action(Ui &ui, const input::ActionEvent &e) {

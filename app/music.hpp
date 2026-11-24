@@ -8,7 +8,10 @@
 
 #include "wnk/platform/files.hpp"
 
+#include <cstdint>
 #include <string>
+
+struct libvlc_instance_t;
 #include <vector>
 
 namespace vplayer {
@@ -20,6 +23,18 @@ struct Album {
     std::string cover;   // an image path, or empty
     std::vector<wnk::platform::FileEntry> tracks;  // natural order
 };
+
+// What a track's tags say (libVLC reads them; empty fields when it found none).
+struct TrackTags {
+    std::string title, artist, album;
+    int number = 0;
+    int64_t duration_ms = 0;
+};
+// Reads the tags of `paths` with libVLC (local files, ~2 s at most each). Blocking: a worker.
+// Builds without libVLC give empty tags.
+std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths);
+// The tracks in tag order when every track has a number, else as they are (indexes into tags).
+std::vector<size_t> tag_order(const std::vector<TrackTags> &tags);
 
 // `files`: audio files and images from scan_files. Albums in natural order of artist, then title.
 std::vector<Album> build_albums(const std::vector<wnk::platform::FileEntry> &files);

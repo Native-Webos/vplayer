@@ -24,6 +24,7 @@ class MusicPage : public Page {
     void scan();
     void show_albums(wnk::ui::Ui &ui, size_t focus);
     void show_album(wnk::ui::Ui &ui, size_t album);
+    void show_tracks(wnk::ui::Ui &ui);
     void activate(wnk::ui::Ui &ui, size_t i);
 
     Services &s_;
@@ -32,6 +33,8 @@ class MusicPage : public Page {
     std::vector<Album> albums_;
     bool scanned_ = false, scanning_ = false;
     int album_ = -1;  // the album shown, -1: the albums
+    std::vector<TrackTags> tags_;   // of the album shown, once read
+    std::vector<size_t> order_;     // its tracks in tag order
     float poll_ = 0;
     wnk::ui::Row *crumbs_ = nullptr;
     wnk::ui::Label *count_ = nullptr;

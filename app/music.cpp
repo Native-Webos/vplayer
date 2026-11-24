@@ -3,7 +3,15 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <chrono>
 #include <map>
+#include <numeric>
+#include <thread>
+
+#if VPLAYER_HAVE_LIBVLC
+#include <vlc/vlc.h>
+#endif
 
 namespace vplayer {
 
@@ -66,5 +74,49 @@ std::vector<Album> build_albums(const std::vector<wnk::platform::FileEntry> &fil
     });
     return out;
 }
+
+std::vector<size_t> tag_order(const std::vector<TrackTags> &tags) {
+    std::vector<size_t> order(tags.size());
+    std::iota(order.begin(), order.end(), size_t{0});
+    const bool numbered = !tags.empty() && std::all_of(tags.begin(), tags.end(), [](const TrackTags &t) { return t.number > 0; });
+    if (numbered)
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return tags[a].number < tags[b].number; });
+    return order;
+}
+
+#if VPLAYER_HAVE_LIBVLC
+std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths) {
+    std::vector<TrackTags> out(paths.size());
+    if (vlc == nullptr) return out;
+    auto meta = [](libvlc_media_t *m, libvlc_meta_t k) {
+        char *v = libvlc_media_get_meta(m, k);
+        std::string s = v ? v : "";
+        if (v) libvlc_free(v);
+        return s;
+    };
+    for (size_t i = 0; i < paths.size(); ++i) {
+        libvlc_media_t *m = libvlc_media_new_path(vlc, paths[i].c_str());
+        if (m == nullptr) continue;
+        libvlc_media_parse_with_options(m, libvlc_media_parse_local, 2000);
+        for (int k = 0; k < 220 && libvlc_media_get_parsed_status(m) == 0; ++k)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        TrackTags &t = out[i];
+        t.title = meta(m, libvlc_meta_Title);
+        t.artist = meta(m, libvlc_meta_Artist);
+        t.album = meta(m, libvlc_meta_Album);
+        t.number = std::atoi(meta(m, libvlc_meta_TrackNumber).c_str());
+        const libvlc_time_t d = libvlc_media_get_duration(m);
+        t.duration_ms = d > 0 ? d : 0;
+        // libVLC names untagged files after themselves: no real title then.
+        if (t.title == paths[i].substr(paths[i].rfind('/') + 1)) t.title.clear();
+        libvlc_media_release(m);
+    }
+    return out;
+}
+#else
+std::vector<TrackTags> read_tags(libvlc_instance_t *, const std::vector<std::string> &paths) {
+    return std::vector<TrackTags>(paths.size());
+}
+#endif
 
 }  // namespace vplayer

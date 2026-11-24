@@ -75,6 +75,7 @@ how to test it, what should happen, and what the log shows.
 | 5.3 | Shuffle all | Tracks from every album in random order |
 | 5.4 | FLAC, AAC/M4A, OGG, Opus, WAV tracks | All play |
 | 5.5 | Unplug the drive | The albums go; plug it back: they return |
+| 5.6 | Open an album of tagged MP3/FLAC files | Within a second or two: "1. Title", the artist and the length on each track, in track order; plays in that order |
 
 ## 6. Resume and history (never run on the TV)
 
