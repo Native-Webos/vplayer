@@ -174,6 +174,12 @@ Continue watching) are done.
 | 7b.18 | `captions.mkv` (then a real US recording with captions) on the TV decoder | Subtitles list "Closed captions (CC1)"; chosen: 1.5–5 s two lines, 6.5 s "café très, España, más", 10.5–14 s one line, 16–26 s roll-up lines scrolling two at a time |
 | 7b.18b | An MPEG-2 ATSC .ts (over-the-air) | Plays on the software path (the TV decoder path takes no MPEG-2); VLC's own "Closed captions 1" track |
 | 7b.19 | Captions on, then seek | No stale lines after the seek; captions resume within a few seconds |
+| 7b.20 | `captions.mkv` (remade by make.sh) → Subtitles → "Closed captions (CEA-708)" | 1 s: "DIGITAL CAPTIONS (CEA-708)" / "second row, from 1 s"; 6 s: "café (708) at 6 s"; gone at 12 s |
+| 7b.21 | Audio → Equalizer → Custom → Adjust the bands | Eleven sliders that scroll; on the TV decoder path the file reopens once the sliders rest; log: `afilter="equalizer"` |
+| 7b.22 | An SMB video → Subtitles → Load a subtitle file | The share's subtitle files listed ("Looking for subtitle files…" first); one loads |
+| 3.14 | An IPTV channel whose parse finds no track (iptv-org Kids → 3ABN Kids) | Log `probe: N track(s) from the stream itself`; plays on the TV decoder, not "refused … software path" |
+| 3.15 | Network → hold OK on a saved server; with the pointer, a long click on it | Edit / Remove / Cancel; a short OK opens it |
+| 3.16 | Sign in to the share with "Remember on this TV", restart the app, open the share | No second sign-in; log `sign-ins saved (Plain): ok` (keymanager3 on webOS 24+) |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
 
