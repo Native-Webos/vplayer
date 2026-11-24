@@ -101,6 +101,12 @@ class Playback {
     virtual std::string error() const = 0;
     // Called every frame on the main thread: lets an implementation poll its engine.
     virtual void tick() {}
+    // The TV draws the picture on its video plane under the UI (hardware path): the screen must
+    // be cleared to transparent and frames() is unused.
+    virtual bool video_plane() const { return false; }
+    // Failed before showing anything in a way another engine may not (the TV decoder refused the
+    // stream): the player should try the software path.
+    virtual bool can_fall_back() const { return false; }
 
     // ---- tracks ----
     virtual std::vector<TrackOption> audio_tracks() const { return {}; }
