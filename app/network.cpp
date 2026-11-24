@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "network.hpp"
+#include "vlc_engine.hpp"
 
 #include "wnk/log.hpp"
 
@@ -218,6 +219,89 @@ std::string take(char *s) {
     return out;
 }
 
+}  // namespace
+
+bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
+                     const wnk::async::CancellationToken &cancel) {
+    out->clear();
+    libvlc_media_t *m = libvlc_media_new_location(vlc_, mrl.c_str());
+    if (m == nullptr) {
+        *error = "libVLC cannot open this address";
+        return false;
+    }
+    // Network access, and dialogs (sign-in) allowed; 30 s at most, cancellable.
+    const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network | libvlc_media_do_interact);
+    libvlc_media_parse_with_options(m, flags, 30000);
+    libvlc_media_parsed_status_t st = static_cast<libvlc_media_parsed_status_t>(0);
+    for (;;) {
+        st = libvlc_media_get_parsed_status(m);
+        if (st != 0) break;
+        if (cancel.cancelled()) {
+            libvlc_media_parse_stop(m);
+            libvlc_media_release(m);
+            *error = "cancelled";
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    libvlc_media_list_t *subs = libvlc_media_subitems(m);
+    const int n = subs ? libvlc_media_list_count(subs) : 0;
+    if (subs != nullptr) {
+        libvlc_media_list_lock(subs);
+        for (int i = 0; i < n; ++i) {
+            libvlc_media_t *s = libvlc_media_list_item_at_index(subs, i);
+            if (s == nullptr) continue;
+            NetEntry e;
+            e.mrl = take(libvlc_media_get_mrl(s));
+            const std::string title = take(libvlc_media_get_meta(s, libvlc_meta_Title));
+            const std::string from_mrl = mrl_display_name(e.mrl);
+            e.name = title.empty() ? from_mrl : title;
+            const libvlc_media_type_t t = libvlc_media_get_type(s);
+            const bool folder = t == libvlc_media_type_directory;
+            // The extension decides what a file is: take it from the MRL when the title has none.
+            e.kind = net_kind(e.name.find('.') != std::string::npos || folder ? e.name : from_mrl, folder);
+            if (t == libvlc_media_type_disc) e.kind = NetEntry::Kind::Media;
+            // VLC's listing leaves subtitle files out and attaches them to the videos they go with.
+            libvlc_media_slave_t **slaves = nullptr;
+            const unsigned ns = libvlc_media_slaves_get(s, &slaves);
+            for (unsigned k = 0; k < ns; ++k)
+                if (slaves[k]->i_type == libvlc_media_slave_type_subtitle && slaves[k]->psz_uri != nullptr)
+                    e.subtitles.emplace_back(slaves[k]->psz_uri);
+            if (ns > 0) libvlc_media_slaves_release(slaves, ns);
+            libvlc_media_release(s);
+            if (!e.mrl.empty()) out->push_back(std::move(e));
+        }
+        libvlc_media_list_unlock(subs);
+        libvlc_media_list_release(subs);
+    }
+    libvlc_media_release(m);
+    if (out->empty() && st != libvlc_media_parsed_status_done) {
+        *error = st == libvlc_media_parsed_status_timeout ? "the server did not answer in time"
+                                                          : "the folder could not be read (address, sign-in or share name?)";
+        return false;
+    }
+    sort_entries(out);
+    WNK_LOGI(kCat, "list %s: %zu entries", loggable(mrl).c_str(), out->size());
+    return true;
+}
+
+std::vector<std::string> find_sidecar_subtitles(libvlc_instance_t *vlc, const std::string &video_mrl,
+                                                const wnk::async::CancellationToken &cancel) {
+    std::vector<std::string> out;
+    const std::string folder = mrl_parent(video_mrl);
+    if (vlc == nullptr || folder.empty()) return out;
+    std::vector<NetEntry> entries;
+    std::string error;
+    if (!list_network_folder(vlc, folder, &entries, &error, cancel)) return out;
+    const std::string video = mrl_display_name(video_mrl);
+    for (const auto &e : entries)
+        if (mrl_display_name(e.mrl) == video) out = e.subtitles;
+    WNK_LOGI(kCat, "%s: %zu subtitle file(s) beside it", video.c_str(), out.size());
+    return out;
+}
+
+namespace {
+
 class VlcBrowser final : public NetworkBrowser {
  public:
     explicit VlcBrowser(libvlc_instance_t *vlc) : vlc_(vlc) {
@@ -275,59 +359,7 @@ class VlcBrowser final : public NetworkBrowser {
 
     bool list(const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
               const wnk::async::CancellationToken &cancel) override {
-        out->clear();
-        libvlc_media_t *m = libvlc_media_new_location(vlc_, mrl.c_str());
-        if (m == nullptr) {
-            *error = "libVLC cannot open this address";
-            return false;
-        }
-        // Network access, and dialogs (sign-in) allowed; 30 s at most, cancellable.
-        const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network | libvlc_media_do_interact);
-        libvlc_media_parse_with_options(m, flags, 30000);
-        libvlc_media_parsed_status_t st = static_cast<libvlc_media_parsed_status_t>(0);
-        for (;;) {
-            st = libvlc_media_get_parsed_status(m);
-            if (st != 0) break;
-            if (cancel.cancelled()) {
-                libvlc_media_parse_stop(m);
-                libvlc_media_release(m);
-                *error = "cancelled";
-                return false;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-        libvlc_media_list_t *subs = libvlc_media_subitems(m);
-        const int n = subs ? libvlc_media_list_count(subs) : 0;
-        if (subs != nullptr) {
-            libvlc_media_list_lock(subs);
-            for (int i = 0; i < n; ++i) {
-                libvlc_media_t *s = libvlc_media_list_item_at_index(subs, i);
-                if (s == nullptr) continue;
-                NetEntry e;
-                e.mrl = take(libvlc_media_get_mrl(s));
-                const std::string title = take(libvlc_media_get_meta(s, libvlc_meta_Title));
-                const std::string from_mrl = mrl_display_name(e.mrl);
-                e.name = title.empty() ? from_mrl : title;
-                const libvlc_media_type_t t = libvlc_media_get_type(s);
-                const bool folder = t == libvlc_media_type_directory;
-                // The extension decides what a file is: take it from the MRL when the title has none.
-                e.kind = net_kind(e.name.find('.') != std::string::npos || folder ? e.name : from_mrl, folder);
-                if (t == libvlc_media_type_disc) e.kind = NetEntry::Kind::Media;
-                libvlc_media_release(s);
-                if (!e.mrl.empty()) out->push_back(std::move(e));
-            }
-            libvlc_media_list_unlock(subs);
-            libvlc_media_list_release(subs);
-        }
-        libvlc_media_release(m);
-        if (out->empty() && st != libvlc_media_parsed_status_done) {
-            *error = st == libvlc_media_parsed_status_timeout ? "the server did not answer in time"
-                                                              : "the folder could not be read (address, sign-in or share name?)";
-            return false;
-        }
-        sort_entries(out);
-        WNK_LOGI(kCat, "list %s: %zu entries", mrl.c_str(), out->size());
-        return true;
+        return list_network_folder(vlc_, mrl, out, error, cancel);
     }
 
  private:
@@ -352,5 +384,19 @@ std::unique_ptr<NetworkBrowser> make_network_browser(libvlc_instance_t *vlc) {
 #endif
     return std::make_unique<DemoBrowser>();
 }
+
+#if !VPLAYER_HAVE_LIBVLC
+bool list_network_folder(libvlc_instance_t *, const std::string &, std::vector<NetEntry> *out, std::string *error,
+                         const wnk::async::CancellationToken &) {
+    out->clear();
+    *error = "no libVLC in this build";
+    return false;
+}
+
+std::vector<std::string> find_sidecar_subtitles(libvlc_instance_t *, const std::string &,
+                                                const wnk::async::CancellationToken &) {
+    return {};
+}
+#endif
 
 }  // namespace vplayer

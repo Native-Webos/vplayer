@@ -4,6 +4,7 @@
 #include "wnk_test.hpp"
 
 #include "network.hpp"
+#include "vlc_engine.hpp"
 
 #include <string>
 
@@ -70,4 +71,12 @@ TEST("saved_places") {
     CHECK(back.urls == p.urls);
     CHECK(saved_places_from_json("not json").servers.empty());
     CHECK(saved_places_from_json("{\"servers\":[{\"name\":1}],\"urls\":[3]}").servers.empty());
+}
+
+TEST("loggable") {
+    CHECK_EQ(loggable("smb://vplayer:secret@192.168.1.2/media/a.mkv"), std::string("smb://vplayer:***@192.168.1.2/media/a.mkv"));
+    CHECK_EQ(loggable("smb://vplayer@nas/a.mkv"), std::string("smb://vplayer@nas/a.mkv"));
+    CHECK_EQ(loggable("smb://nas/films/a@b.mkv"), std::string("smb://nas/films/a@b.mkv"));
+    CHECK_EQ(loggable("/tmp/usb/a.mkv"), std::string("/tmp/usb/a.mkv"));
+    CHECK_EQ(loggable("http://host:8080/live.m3u8"), std::string("http://host:8080/live.m3u8"));
 }

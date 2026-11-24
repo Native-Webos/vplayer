@@ -35,6 +35,7 @@ struct NetEntry {
     std::string mrl;     // what libVLC opens (and lists, for servers and folders)
     Kind kind = Kind::Other;
     std::string detail;  // "SMB share", "DLNA media server", ...
+    std::vector<std::string> subtitles;  // subtitle files beside it, as VLC matched them (their MRLs)
     bool playable() const { return kind == Kind::Video || kind == Kind::Audio || kind == Kind::Media; }
 };
 
@@ -50,6 +51,14 @@ class NetworkBrowser {
 
 // libVLC's browser when `vlc` is set, else the demo one.
 std::unique_ptr<NetworkBrowser> make_network_browser(libvlc_instance_t *vlc);
+
+// The entries of a network folder through libVLC, without starting discovery. Blocking.
+bool list_network_folder(libvlc_instance_t *vlc, const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
+                         const wnk::async::CancellationToken &cancel);
+// The subtitle files beside a network video: its folder listed, and the files VLC's listing matched
+// to it (VLC 3 adds them to what plays only for local files). Blocking (a worker). Empty without libVLC.
+std::vector<std::string> find_sidecar_subtitles(libvlc_instance_t *vlc, const std::string &video_mrl,
+                                                const wnk::async::CancellationToken &cancel);
 
 // ---- helpers (pure, tested on the host) ----
 

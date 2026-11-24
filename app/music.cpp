@@ -101,11 +101,6 @@ std::vector<size_t> tag_order(const std::vector<TrackTags> &tags) {
 }
 
 #if VPLAYER_HAVE_LIBVLC
-std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc) {
-    if (vlc == nullptr) return nullptr;
-    libvlc_retain(vlc);
-    return std::shared_ptr<libvlc_instance_t>(vlc, [](libvlc_instance_t *v) { libvlc_release(v); });
-}
 
 std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths,
                                  const std::function<bool()> &stop) {
@@ -138,7 +133,6 @@ std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::
     return out;
 }
 #else
-std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *) { return nullptr; }
 
 std::vector<TrackTags> read_tags(libvlc_instance_t *, const std::vector<std::string> &paths,
                                  const std::function<bool()> &) {

@@ -92,6 +92,7 @@ class PlayerScreen : public wnk::ui::Screen {
     // The audio effects changed: applied live where the engine can, else the file reopens here.
     void apply_effects(wnk::ui::Ui &ui);
     void reopen_for_effects(wnk::ui::Ui &ui);
+    void find_sidecars(const std::string &path);
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }
@@ -169,6 +170,8 @@ class PlayerScreen : public wnk::ui::Screen {
         int audio_delay_ms = 0, subtitle_delay_ms = 0;
     };
     std::optional<Reopen> reopen_;
+    uint64_t opened_ = 0;               // counts start(): a sidecar search applies to its own file only
+    wnk::async::Lifetime lifetime_;     // the sidecar search's result is dropped once the screen is gone
     bool software_ = false;    // this file fell back to the software path
     bool reported_ = false;
     int pending_panel_ = -1;

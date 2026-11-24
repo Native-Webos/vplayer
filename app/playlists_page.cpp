@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "playlists_page.hpp"
+#include "vlc_engine.hpp"
 
 #include "library.hpp"
 #include "network.hpp"
@@ -185,7 +186,7 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
     list_name_ = name;
     list_location_ = location;
     opening_ = true;
-    WNK_LOGI(kCat, "open list %s", location.c_str());
+    WNK_LOGI(kCat, "open list %s", loggable(location).c_str());
     set_header(name, "", "Loading…");
     auto http = s_.ctx->http();
     wnk::async::run_then_post<Loaded>(
@@ -206,7 +207,7 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
                 req.timeout_ms = 30000;
                 const auto t0 = std::chrono::steady_clock::now();
                 const auto resp = http->perform(req, cancel);
-                WNK_LOGI(kCat, "fetched %s: status %d, %zu bytes, %lld ms", location.c_str(), resp.status, resp.body.size(),
+                WNK_LOGI(kCat, "fetched %s: status %d, %zu bytes, %lld ms", loggable(location).c_str(), resp.status, resp.body.size(),
                          static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
                                                     std::chrono::steady_clock::now() - t0).count()));
                 if (!resp.ok()) {
@@ -226,7 +227,7 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
 void PlaylistsPage::show_list(Ui &ui, Playlist list, const std::string &error) {
     opening_ = false;
     if (!error.empty()) {
-        WNK_LOGW(kCat, "%s: %s", list_location_.c_str(), error.c_str());
+        WNK_LOGW(kCat, "%s: %s", loggable(list_location_).c_str(), error.c_str());
         ui.toast("Cannot open " + list_name_ + ": " + error, 5000);
         show_root(ui, true);
         return;
@@ -238,7 +239,7 @@ void PlaylistsPage::show_list(Ui &ui, Playlist list, const std::string &error) {
     }
     list_ = std::move(list);
     groups_ = list_.groups();
-    WNK_LOGI(kCat, "%s: %zu entries in %zu groups", list_location_.c_str(), list_.items.size(), groups_.size());
+    WNK_LOGI(kCat, "%s: %zu entries in %zu groups", loggable(list_location_).c_str(), list_.items.size(), groups_.size());
     if (list_.items.empty()) {
         ui.toast(list_name_ + " is empty.");
         show_root(ui, true);

@@ -105,7 +105,7 @@ class VlcPlayback final : public Playback {
             if (!set_player_audio_filters(mp_, filters)) WNK_LOGW(kCat, "vlc: audio filters %s not set", filters.c_str());
         }
         if (libvlc_media_player_play(mp_) != 0) error_ = "libVLC refused to play it";
-        WNK_LOGI(kCat, "vlc: play %s", mrl.c_str());
+        WNK_LOGI(kCat, "vlc: play %s", loggable(mrl).c_str());
     }
 
     ~VlcPlayback() override {

@@ -2,6 +2,7 @@
 #include "music_page.hpp"
 
 #include "library.hpp"
+#include "vlc_engine.hpp"
 
 #include "wnk/log.hpp"
 

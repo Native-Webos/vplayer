@@ -319,7 +319,7 @@ class App : public wnk::app::Delegate {
     // Opens the player on `e`, with the playable files of its folder as the queue (previous/next,
     // play the next file automatically).
     void play(Ui &ui, const wnk::platform::FileEntry &e) {
-        WNK_LOGI(kCat, "play: %s", e.path.c_str());
+        WNK_LOGI(kCat, "play: %s", vplayer::loggable(e.path).c_str());
         if (!engine_ && !vlc_info_) {
             ui.toast("The player is still starting. Try again in a moment.");
             return;

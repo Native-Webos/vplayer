@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/hw_playback.hpp"
+#include "vlc_engine.hpp"
 
 #include "player/subtitle_text.hpp"
 #include "player/vlc_source.hpp"
@@ -76,7 +77,7 @@ class HwPlayback final : public Playback {
         });
         controller_->set_video_area({0, 0, 1920, 1080});
         controller_->open(path);
-        WNK_LOGI(kCat, "open %s with %s", path.c_str(), backend_name_.c_str());
+        WNK_LOGI(kCat, "open %s with %s", loggable(path).c_str(), backend_name_.c_str());
     }
 
     ~HwPlayback() override {

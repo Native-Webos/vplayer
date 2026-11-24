@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/player_screen.hpp"
 
+#include "vlc_engine.hpp"
+
+#include "network.hpp"
+
 #include "music.hpp"
 #include "thumbnails.hpp"
 
@@ -813,6 +817,7 @@ void PlayerScreen::start(Ui &ui) {
         ui.toast("Cannot open " + e.name);
         return;
     }
+    find_sidecars(e.path);
     // The hardware path draws on the TV's video plane under the UI: clear to transparent there.
     const bool plane = playback_->video_plane();
     video_->set_visible(!plane);
@@ -865,7 +870,7 @@ void PlayerScreen::start(Ui &ui) {
     applied_ = reported_ = false;
     prev_btn_->set_enabled(has_previous());
     next_btn_->set_enabled(has_next());
-    WNK_LOGI(kCat, "open %zu/%zu: %s", index_ + 1, queue_.size(), e.path.c_str());
+    WNK_LOGI(kCat, "open %zu/%zu: %s", index_ + 1, queue_.size(), loggable(e.path).c_str());
 }
 
 // Where this file stopped, for its resume point and "Continue watching".
@@ -945,6 +950,29 @@ void PlayerScreen::apply_session() {
         if (r.audio_delay_ms != 0) playback_->set_audio_delay_ms(r.audio_delay_ms);
         if (r.subtitle_delay_ms != 0) playback_->set_subtitle_delay_ms(r.subtitle_delay_ms);
     }
+}
+
+void PlayerScreen::find_sidecars(const std::string &path) {
+    // VLC 3 finds subtitle files beside a video only for local files: on a share, the app lists the
+    // folder (a worker: the server may be slow) and adds what goes with the video.
+    const uint64_t which = ++opened_;
+    const std::string proto = path.substr(0, path.find("://"));
+    static const char *const shares[] = {"smb", "nfs", "ftp", "ftps", "sftp"};
+    if (s_.vlc == nullptr || path.find("://") == std::string::npos ||
+        std::none_of(std::begin(shares), std::end(shares), [&](const char *p) { return proto == p; }))
+        return;
+    wnk::async::run_then_post<std::vector<std::string>>(
+        s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
+        [vlc = hold_vlc(s_.vlc), path](const wnk::async::CancellationToken &cancel) {
+            return find_sidecar_subtitles(vlc.get(), path, cancel);
+        },
+        [this, which](std::vector<std::string> subs) {
+            if (which != opened_ || !playback_) return;  // another file meanwhile
+            for (const auto &s : subs) {
+                const bool ok = playback_->add_subtitle_file(s);
+                WNK_LOGI(kCat, "subtitle file beside it: %s%s", mrl_display_name(s).c_str(), ok ? "" : " (not added yet)");
+            }
+        });
 }
 
 void PlayerScreen::apply_effects(Ui &ui) {

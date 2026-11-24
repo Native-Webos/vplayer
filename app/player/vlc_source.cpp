@@ -303,7 +303,7 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         std::lock_guard<std::mutex> lock(mu_);
         fonts_ = std::move(fonts);
     }
-    WNK_LOGI(kCat, "open %s: %zu tracks, %" PRId64 " ms", uri.c_str(), info_.tracks.size(),
+    WNK_LOGI(kCat, "open %s: %zu tracks, %" PRId64 " ms", loggable(uri).c_str(), info_.tracks.size(),
              info_.duration_us == kNoTime ? int64_t{-1} : info_.duration_us / 1000);
     if (info_.tracks.empty()) {
         if (error) *error = "libVLC found no playable track";

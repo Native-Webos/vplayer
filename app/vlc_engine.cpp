@@ -17,7 +17,19 @@ namespace {
 constexpr const char *kCat = "vlc";
 }
 
+std::string loggable(const std::string &mrl) {
+    const size_t scheme = mrl.find("://");
+    if (scheme == std::string::npos) return mrl;
+    const size_t start = scheme + 3;
+    const size_t at = mrl.find('@', start), slash = mrl.find('/', start);
+    if (at == std::string::npos || (slash != std::string::npos && at > slash)) return mrl;  // no user part
+    const size_t colon = mrl.find(':', start);
+    if (colon == std::string::npos || colon > at) return mrl;  // a user, no password
+    return mrl.substr(0, colon + 1) + "***" + mrl.substr(at);
+}
+
 std::string file_uri(const std::string &path) {
+    if (path.find("://") != std::string::npos) return path;  // already an address (smb://, http://...)
     static const char hex[] = "0123456789ABCDEF";
     std::string out = "file://";
     for (const char ch : path) {
@@ -118,7 +130,15 @@ VlcEngine::~VlcEngine() {
     if (vlc_) libvlc_release(vlc_);
 }
 
+std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc) {
+    if (vlc == nullptr) return nullptr;
+    libvlc_retain(vlc);
+    return std::shared_ptr<libvlc_instance_t>(vlc, [](libvlc_instance_t *v) { libvlc_release(v); });
+}
+
 #else  // !VPLAYER_HAVE_LIBVLC
+
+std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *) { return nullptr; }
 
 std::unique_ptr<VlcEngine> VlcEngine::create(const std::string &, VlcInfo &info) {
     info.error = "this build has no libVLC (host build)";
