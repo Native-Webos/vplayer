@@ -5,6 +5,7 @@
 
 #include "app_settings.hpp"
 #include "history.hpp"
+#include "opensubtitles.hpp"
 #include "playlist.hpp"
 #include "ui/theme.hpp"
 #include "vlc_engine.hpp"
@@ -31,6 +32,12 @@ struct Services {
     // The viewer's own playlists (playlist.hpp), and saving them after a change (main thread).
     std::vector<MyPlaylist> *my_playlists = nullptr;
     std::function<void()> save_my_playlists;
+    // Subtitle downloads (opensubtitles.hpp): the viewer's account, a client while one is set up
+    // (null otherwise), where downloaded files go, and saving a changed account (secret store).
+    vplayer::opensubs::Account subtitles_account;
+    std::shared_ptr<vplayer::opensubs::Client> subtitles;
+    std::string subtitles_dir;
+    std::function<void(const vplayer::opensubs::Account &)> set_subtitles_account;
     class Thumbnails *thumbnails = nullptr;  // video thumbnails, once libVLC runs (thumbnails.hpp)
     libvlc_instance_t *vlc = nullptr;        // once libVLC runs
     std::chrono::steady_clock::time_point login_cancelled{};  // the viewer last cancelled a sign-in

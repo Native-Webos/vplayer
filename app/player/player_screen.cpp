@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/player_screen.hpp"
 
+#include <fstream>
+
+#include "app_settings.hpp"
+
 #include "vlc_engine.hpp"
 
 #include "network.hpp"
@@ -392,6 +396,7 @@ class PlayerPanel : public View {
             });
         }
         rows_->add<ValueRow>("Load a subtitle file", "From this folder", [this](Ui &ui) { pick_subtitle_file(ui); });
+        rows_->add<ValueRow>("Download subtitles", "OpenSubtitles", [this](Ui &ui) { screen_.download_subtitles(ui); });
         section("ADJUST");
         auto &delay = rows_->add<Slider>("Subtitle delay", -10.0f, 10.0f, 0.05f, st.subtitle_delay_ms / 1000.0f,
                                          [this](Ui &, float v) {
@@ -1013,6 +1018,107 @@ void PlayerScreen::offer_subtitle_files(Ui &ui) {
             return files;
         },
         [this, show](std::vector<std::pair<std::string, std::string>> files) { show(s_.ctx->ui(), std::move(files)); });
+}
+
+void PlayerScreen::download_subtitles(Ui &ui) {
+    if (!s_.subtitles) {
+        ui.toast("Set up subtitle downloads in Settings first (your OpenSubtitles account).", 5000);
+        return;
+    }
+    // The language: the subtitle language from Settings, else English.
+    const auto &langs = languages();
+    int at = 0;
+    for (size_t i = 0; i < langs.size(); ++i)
+        if (s_.settings != nullptr && s_.settings->subtitle_language == langs[i].code) at = static_cast<int>(i);
+    std::vector<std::string> names;
+    for (const auto &l : langs) names.emplace_back(l.name);
+    auto choice = std::make_shared<int>(at);
+    auto d = std::make_unique<Dialog>("Download subtitles", "From OpenSubtitles, for " + display_name(queue_[index_].name) + ".");
+    d->body().add<Choice>("Language", names, at, [choice](Ui &, int i) { *choice = i; });
+    d->add_button("Search", [this, choice](Ui &u) { search_subtitles(u, languages()[static_cast<size_t>(*choice)].code); });
+    d->add_button("Cancel");
+    ui.show_dialog(std::move(d));
+}
+
+void PlayerScreen::search_subtitles(Ui &ui, const std::string &language) {
+    if (!s_.subtitles || queue_.empty()) return;
+    const auto &e = queue_[index_];
+    const uint64_t which = opened_;
+    ui.toast("Searching OpenSubtitles…");
+    wnk::async::run_then_post<std::pair<std::vector<opensubs::Result>, std::string>>(
+        s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
+        [client = s_.subtitles, path = e.path, query = display_name(e.name), language](const wnk::async::CancellationToken &cancel) {
+            // A local file is found by its hash too (an exact match); a share's by its name.
+            const auto hash = path.find("://") == std::string::npos ? opensubs::movie_hash(path) : std::nullopt;
+            std::pair<std::vector<opensubs::Result>, std::string> r;
+            client->search(query, hash.value_or(""), language, &r.first, &r.second, cancel);
+            return r;
+        },
+        [this, which](std::pair<std::vector<opensubs::Result>, std::string> r) {
+            Ui &u = s_.ctx->ui();
+            if (which != opened_) return;
+            if (!r.second.empty()) {
+                u.toast("Cannot search: " + r.second, 6000);
+                return;
+            }
+            if (r.first.empty()) {
+                u.toast("OpenSubtitles has nothing for this file in that language.", 5000);
+                return;
+            }
+            auto d = std::make_unique<Dialog>("Subtitles found", "Choose one to download and use it.");
+            for (size_t k = 0; k < r.first.size() && k < 12; ++k) {
+                const auto &x = r.first[k];
+                std::string label = (x.hash_match ? "Exact match · " : "") + (x.release.empty() ? x.file_name : x.release);
+                if (label.size() > 70) label = label.substr(0, 67) + "...";
+                label += " · " + std::to_string(x.downloads) + (x.hearing_impaired ? " · SDH" : "");
+                d->add_button(label, [this, x](Ui &u2) { fetch_subtitle(u2, x); });
+            }
+            d->add_button("Cancel");
+            u.show_dialog(std::move(d));
+        });
+}
+
+void PlayerScreen::fetch_subtitle(Ui &ui, const opensubs::Result &result) {
+    if (!s_.subtitles) return;
+    const uint64_t which = opened_;
+    ui.toast("Downloading…");
+    struct Got {
+        std::string path, error;
+        opensubs::Download info;
+    };
+    wnk::async::run_then_post<Got>(
+        s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
+        [client = s_.subtitles, dir = s_.subtitles_dir, result](const wnk::async::CancellationToken &cancel) {
+            Got g;
+            std::string text;
+            if (!client->download(result.file_id, &text, &g.info, &g.error, cancel)) return g;
+            if (dir.empty()) {
+                g.error = "no folder to keep it in";
+                return g;
+            }
+            // Kept in the app's own folder, named after the file id (the name is OpenSubtitles').
+            std::string name = g.info.file_name.empty() ? result.file_name : g.info.file_name;
+            for (auto &c : name)
+                if (c == '/' || c == '\\' || c == ':') c = '_';
+            if (name.empty() || name.find('.') == std::string::npos) name += ".srt";
+            g.path = dir + "/" + std::to_string(result.file_id) + "-" + name;
+            std::ofstream f(g.path, std::ios::binary);
+            f.write(text.data(), static_cast<std::streamsize>(text.size()));
+            if (!f) g.error = "could not keep the file";
+            return g;
+        },
+        [this, which](Got g) {
+            Ui &u = s_.ctx->ui();
+            if (!g.error.empty()) {
+                u.toast("Cannot download: " + g.error, 6000);
+                return;
+            }
+            if (which != opened_ || !playback_) return;
+            const bool ok = playback_->add_subtitle_file(g.path);
+            std::string left = g.info.remaining >= 0 ? " · " + std::to_string(g.info.remaining) + " downloads left today" : "";
+            u.toast(ok ? "Subtitles loaded" + left : "Downloaded, but the player could not load it", 5000);
+            WNK_LOGI(kCat, "downloaded subtitles loaded: %s", ok ? "yes" : "no");
+        });
 }
 
 void PlayerScreen::find_sidecars(const std::string &path) {

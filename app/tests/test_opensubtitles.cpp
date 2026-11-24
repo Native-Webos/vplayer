@@ -7,6 +7,7 @@
 #include "opensubtitles.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <string>
@@ -146,4 +147,20 @@ TEST("client_reports_quota") {
     Download info;
     CHECK(!c.download(42, &text, &info, &err, {}));
     CHECK(err.find("used up") != std::string::npos);
+}
+
+// Against the real server, only when VPLAYER_TEST_OPENSUBTITLES=1: a search with a made-up key is
+// refused, and the refusal is told as such (the requests reach the API as it expects them).
+TEST("live_search_with_a_made_up_key") {
+    const char *on = std::getenv("VPLAYER_TEST_OPENSUBTITLES");
+    if (on == nullptr || std::string(on) != "1") return;
+    std::string why;
+    std::shared_ptr<wnk::net::HttpTransport> http = wnk::net::make_curl_transport({}, &why);
+    REQUIRE(http != nullptr);
+    Client c(http, Account{"vplayer-made-up-key", "nobody", "nothing"});
+    std::vector<Result> r;
+    std::string err;
+    CHECK(!c.search("big buck bunny", "", "en", &r, &err, {}));
+    std::printf("live search: %s\n", err.c_str());
+    CHECK(!err.empty());
 }

@@ -6,6 +6,7 @@
 //
 // The main screen is a top bar (logo, tabs, search, settings) over one page per tab. libVLC starts
 // on a worker while the UI comes up; Settings shows what it reported.
+#include "wnk/storage/secret.hpp"
 #include "app_settings.hpp"
 #include "library.hpp"
 #include "music_page.hpp"
@@ -57,7 +58,11 @@ struct EngineResult {
     std::vector<vplayer::HistoryEntry> history;  // read from the store on the same worker
     vplayer::AppSettings settings;
     std::vector<vplayer::MyPlaylist> my_playlists;
+    vplayer::opensubs::Account subtitles_account;  // from the secret store
 };
+
+constexpr const char *kSecretsKey = "com.sostk.vplayer.secrets.v1";
+constexpr const char *kSubtitlesAccount = "opensubtitles.account";
 
 class MainScreen : public Screen {
  public:
@@ -176,6 +181,18 @@ class App : public wnk::app::Delegate {
         services_.history = &history_;
         services_.settings = &settings_;
         services_.my_playlists = &my_playlists_;
+        services_.set_subtitles_account = [this](const vplayer::opensubs::Account &a) {
+            use_subtitles_account(a);
+            auto *store = services_.ctx->store();
+            if (store == nullptr) return;
+            services_.ctx->pool().submit([store, a](const wnk::async::CancellationToken &) {
+                wnk::storage::SecretStore secrets(*store, wnk::storage::luna_keymanager3(), kSecretsKey);
+                const auto st = a.configured() ? secrets.put(kSubtitlesAccount, vplayer::opensubs::account_json(a))
+                                               : secrets.remove(kSubtitlesAccount);
+                WNK_LOGI(kCat, "subtitle-download account %s (%s): %s", a.configured() ? "saved" : "removed",
+                         wnk::storage::protection_name(secrets.protection()), wnk::storage::secret_status_name(st));
+            });
+        };
         services_.save_my_playlists = [this] {
             auto *store = services_.ctx->store();
             if (store == nullptr) return;
@@ -216,6 +233,12 @@ class App : public wnk::app::Delegate {
                         r.my_playlists = vplayer::my_playlists_from_json(e.value);
                 }
                 r.settings = vplayer::read_settings(store);
+                if (store != nullptr) {  // the subtitle-download account, sealed where the TV can
+                    wnk::storage::SecretStore secrets(*store, wnk::storage::luna_keymanager3(), kSecretsKey);
+                    std::string text;
+                    if (secrets.get(kSubtitlesAccount, &text) == wnk::storage::SecretStatus::Ok)
+                        r.subtitles_account = vplayer::opensubs::account_from_json(text);
+                }
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info, store);
                 // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
                 r.hw_available = vplayer::hw_playback_available(&r.hw_why);
@@ -231,6 +254,7 @@ class App : public wnk::app::Delegate {
                 vlc_info_ = std::move(r.info);
                 history_.adopt(ctx.store(), std::move(r.history));
                 my_playlists_ = std::move(r.my_playlists);
+                use_subtitles_account(r.subtitles_account);
                 settings_ = r.settings;
                 history_.set_resume(settings_.resume);
                 if (settings_.software_only && decoder_ == "auto") decoder_ = "software";
@@ -417,16 +441,20 @@ class App : public wnk::app::Delegate {
 
     // Where thumbnails are kept: beside the app where the TV lets it write (as the kit's HTTP cache),
     // else until reboot under /tmp; ~/.cache on a desktop.
-    static std::string thumbnail_dir(wnk::app::Context &ctx) {
+    static std::string thumbnail_dir(wnk::app::Context &ctx) { return app_dir_for(ctx, "thumbs"); }
+
+    // A writable folder of the app's own (`name` under its state folder; /tmp when that is not
+    // writable), created; empty when none is.
+    static std::string app_dir_for(wnk::app::Context &ctx, const std::string &name) {
         std::vector<std::string> dirs;
         if constexpr (wnk::platform::kIsWebOS) {
-            dirs.push_back(ctx.launch().app_dir + "/.wnk-state/thumbs");
-            dirs.push_back("/tmp/" + ctx.launch().app_id + "/thumbs");
+            dirs.push_back(ctx.launch().app_dir + "/.wnk-state/" + name);
+            dirs.push_back("/tmp/" + ctx.launch().app_id + "/" + name);
         } else {
             const char *xdg = std::getenv("XDG_CACHE_HOME");
             const char *home = std::getenv("HOME");
             const std::string base = xdg && xdg[0] == '/' ? xdg : home ? std::string(home) + "/.cache" : "/tmp";
-            dirs.push_back(base + "/" + ctx.launch().app_id + "/thumbs");
+            dirs.push_back(base + "/" + ctx.launch().app_id + "/" + name);
         }
         for (const auto &d : dirs) {
             std::string p;
@@ -440,6 +468,45 @@ class App : public wnk::app::Delegate {
             }
         }
         return {};
+    }
+
+    // Settings → Subtitle downloads: the OpenSubtitles API key and account.
+    void set_up_subtitles(Ui &ui) {
+        auto d = std::make_unique<wnk::ui::Dialog>(
+            "Subtitle downloads",
+            "VPlayer searches OpenSubtitles with your own free account: sign up at opensubtitles.com, then under "
+            "your profile create an API consumer for its key. Free accounts can download a few subtitles a day.");
+        const auto &a = services_.subtitles_account;
+        auto &key = d->body().add<wnk::ui::TextField>("API key");
+        key.set_text(a.api_key);
+        auto &user = d->body().add<wnk::ui::TextField>("User name");
+        user.set_text(a.username);
+        auto &pass = d->body().add<wnk::ui::TextField>("Password");
+        pass.set_password(true);
+        pass.set_text(a.password);
+        d->add_button("Save", [this, &key, &user, &pass](Ui &u) {
+            vplayer::opensubs::Account n{key.text(), user.text(), pass.text()};
+            if (!n.configured()) {
+                u.toast("All three are needed: the API key, the user name and the password.");
+                return;
+            }
+            services_.set_subtitles_account(n);
+            u.toast("Subtitle downloads set up for " + n.username);
+        });
+        if (a.configured())
+            d->add_button("Remove", [this](Ui &u) {
+                services_.set_subtitles_account({});
+                u.toast("Subtitle downloads turned off");
+            });
+        d->add_button("Cancel");
+        ui.show_dialog(std::move(d));
+    }
+
+    // The subtitle-download account in use (and the client for it).
+    void use_subtitles_account(const vplayer::opensubs::Account &a) {
+        services_.subtitles_account = a;
+        services_.subtitles = a.configured() ? std::make_shared<vplayer::opensubs::Client>(services_.ctx->http(), a) : nullptr;
+        if (services_.subtitles_dir.empty()) services_.subtitles_dir = app_dir_for(*services_.ctx, "subtitles");
     }
 
     void show_settings(Ui &ui) {
@@ -475,6 +542,11 @@ class App : public wnk::app::Delegate {
                                            settings_.audio_pcm = i == 1;
                                            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
                                        });
+        // Subtitle downloads: the viewer's own OpenSubtitles account and API key.
+        d->body().add<wnk::ui::ValueRow>("Subtitle downloads",
+                                         services_.subtitles_account.configured() ? "OpenSubtitles · " + services_.subtitles_account.username
+                                                                                   : "Not set up",
+                                         [this](Ui &u) { set_up_subtitles(u); });
         // Languages: the audio track, and whether (and which) subtitles start on.
         const auto &langs = vplayer::languages();
         std::vector<std::string> audio_names{"As the file says"}, sub_names{"As the file says", "Always on (first track)"};
