@@ -247,3 +247,19 @@ Driven with `app/tools/tv-keys.sh` (real remote events), on H.264 + AAC/AC-3 MKV
   the TV decoder path plays at 1× only; the panel and bar say so. A tempo filter in the `#transcode`
   chain would lift this.
 - Colour keys (red Info, green Playback, yellow Subtitles, blue Audio) open their panel tabs.
+
+## 14. Dolby Vision on the hardware path (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
+
+- VLC 3 neither parses the DV configuration record nor reports Dolby Vision. The app reads the record
+  itself from local files (`app/player/dovi_detect.cpp`): Matroska's BlockAdditionMapping
+  (BlockAddIDType `dvcC`/`dvvC`) of the first video track, or the `dvcC`/`dvvC` box of MP4's HEVC
+  sample entry. Files without one (older remuxes) are recognised from their first keyframe: RPUs
+  (UNSPEC62), an enhancement layer (UNSPEC63 or nuh_layer_id > 0); the base layer's transfer then
+  gives the profile (PQ 8.1, HLG 8.4, else 5).
+- The profile goes to the kit's Starfish backend, which declares it (`DolbyHdrInfo`, profileId) when
+  the TV supports Dolby Vision. Profile 7 (dual layer) loses its enhancement layer and has its RPUs
+  rewritten to 8.1 by the kit's libdovi on the way (`hevc_dovi_p7_to_p81`).
+- On the TV: a generated 8.1 stream (x265 HDR10 + RPUs from the `dolby_vision` crate, no record) and
+  the 4K TrueHD test file, which turned out to be a Profile 7 dual layer without a record: Starfish
+  reports `"hdrType":"DolbyVision"`, the TV shows its Dolby Vision badge, 0 frames dropped, 0 RPUs
+  dropped in conversion. Files with a record were tested on the host only (synthetic MKV/MP4).

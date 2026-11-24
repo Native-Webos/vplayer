@@ -77,8 +77,8 @@ release and date.
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
 - [ ] Speed on the hardware path: time-stretched audio from VLC (tempo filter in `#transcode`)
 - [ ] Chapters on the hardware path
-- [ ] Dolby Vision (profile 5/8) declared to Starfish: VLC 3 does not report it; detect from the codec
-      setup or RPU NALs
+- [x] Dolby Vision declared to Starfish (RESEARCH.md §14): configuration record from MKV/MP4, or RPUs in
+      the first keyframe; Profile 7 fed as 8.1. On the TV 2026-11-24
 - [x] Seek precision: lands on the keyframe at or before the target (was up to 9 s early)
 - [ ] Settings → Decoder: Automatic / Hardware / Software (today: the `"decoder"` launch parameter)
 
