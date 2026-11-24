@@ -9,6 +9,7 @@
 #include "wnk/media/ndl_backend.hpp"
 #include "wnk/media/starfish_backend.hpp"
 
+#include <chrono>
 #include <cstdio>
 
 namespace vplayer {
@@ -58,8 +59,9 @@ class HwPlayback final : public Playback {
         backend_name_ = backend->name();
         media::PlaybackOptions po;
         po.autoplay = true;
-        controller_ = std::make_unique<media::PlaybackController>(
-            std::make_unique<VlcSource>(vlc, std::move(vlc_options)), std::move(backend), main, po);
+        auto source = std::make_unique<VlcSource>(vlc, std::move(vlc_options));
+        source_ = source.get();  // owned by the controller, which outlives every use here
+        controller_ = std::make_unique<media::PlaybackController>(std::move(source), std::move(backend), main, po);
         controller_->set_state_callback([this](media::PlayState from, media::PlayState to,
                                                const media::PlaybackSnapshot &snap) {
             WNK_LOGI(kCat, "%s -> %s%s%s", media::play_state_name(from), media::play_state_name(to),
@@ -114,6 +116,20 @@ class HwPlayback final : public Playback {
         controller_->seek(position * 1000);
     }
     std::shared_ptr<FrameSink> frames() const override { return nullptr; }
+
+    // libVLC chooses the subtitle track (default flags, language, a file beside the media, the
+    // viewer through set_subtitle_track): the controller's store is read for whichever it is.
+    void tick() override {
+        if (!controller_) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (now < next_sync_) return;
+        next_sync_ = now + std::chrono::milliseconds(250);
+        const int id = source_->subtitle_track();
+        if (id != controller_->subtitle_track()) {
+            WNK_LOGI(kCat, "subtitle track %d (%s)", id, source_->subtitle_codec(id).c_str());
+            controller_->set_subtitle_track(id);
+        }
+    }
     bool video_plane() const override { return true; }
     bool can_fall_back() const override { return !played_ && state() == PlayState::Error; }
 
@@ -157,7 +173,42 @@ class HwPlayback final : public Playback {
         if (controller_) controller_->set_audio_track(id);
     }
     std::vector<TrackOption> subtitle_tracks() const override {
-        return {{-1, "Off (subtitles on the TV decoder are coming)"}};
+        std::vector<TrackOption> out;
+        if (!controller_) return out;
+        for (const auto &t : source_->subtitle_tracks()) {
+            std::string name = t.id < 0 ? "Off" : t.name;  // as on the software path
+            if (t.id >= 0 && t.kind == media::SubtitleKind::None) name += " (not shown with the TV decoder yet)";
+            out.push_back({t.id, name});
+        }
+        return out;
+    }
+    // libVLC's selection (the controller follows it within tick()'s period).
+    int subtitle_track() const override { return controller_ ? source_->subtitle_track() : -1; }
+    void set_subtitle_track(int id) override {
+        if (!controller_) return;
+        source_->set_subtitle_track(id);
+        controller_->set_subtitle_track(id);
+        next_sync_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);  // libVLC catches up
+    }
+    bool add_subtitle_file(const std::string &path) override { return controller_ && source_->add_subtitle_file(path); }
+    void set_subtitle_delay_ms(int64_t ms) override { subtitle_delay_us_ = ms * 1000; }
+    std::vector<std::shared_ptr<const media::SubtitleCue>> subtitle_cues() const override {
+        if (!controller_) return {};
+        // At the presented position (the backend's, from the frames it reports on screen), not
+        // subtitles_now()'s clock, which starts at the first packet fed and so runs ahead of the
+        // picture by the decoder's buffer (0.7-0.9 s measured with Starfish).
+        const int track = controller_->subtitle_track();
+        const auto s = controller_->snapshot();
+        if (track < 0 || s.position_us == media::kNoTime) return {};
+        return controller_->subtitle_store().active(track, s.position_us - subtitle_delay_us_);
+    }
+    std::string subtitle_ass_header() const override {
+        return controller_ ? source_->ass_header(controller_->subtitle_track()) : std::string();
+    }
+    std::pair<int, int> video_size() const override {
+        if (!controller_) return {0, 0};
+        const auto s = controller_->snapshot();
+        return s.format.video ? std::make_pair(s.format.video->width, s.format.video->height) : std::make_pair(0, 0);
     }
     std::vector<TrackOption> video_tracks() const override {
         std::vector<TrackOption> out;
@@ -195,6 +246,12 @@ class HwPlayback final : public Playback {
                                                std::to_string(s.format.audio->channels) + " ch" +
                                                (same ? "" : " (converted by VLC)"));
         }
+        const int sub = controller_->subtitle_track();
+        if (sub >= 0) {
+            const std::string codec = source_->subtitle_codec(sub);
+            rows.emplace_back("Subtitles", (codec.empty() ? std::string("waiting for libVLC") : codec) + " · drawn by the app · " +
+                                               std::to_string(controller_->subtitle_store().count(sub)) + " cues read");
+        }
         rows.emplace_back("Decoding", std::string("TV decoder (") + controller_->backend_name() + ")");
         rows.emplace_back("Packets fed", std::to_string(s.video_packets) + " video · " + std::to_string(s.audio_packets) + " audio");
         rows.emplace_back("Rebuffers", std::to_string(s.rebuffers));
@@ -203,6 +260,9 @@ class HwPlayback final : public Playback {
 
  private:
     std::unique_ptr<media::PlaybackController> controller_;
+    VlcSource *source_ = nullptr;
+    std::chrono::steady_clock::time_point next_sync_{};
+    int64_t subtitle_delay_us_ = 0;
     std::string backend_name_, error_;
     bool paused_ = false;
     bool played_ = false;  // set on the main thread by the state callback

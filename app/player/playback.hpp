@@ -6,11 +6,14 @@
 //   * VLC (software path, P1): libVLC decodes; frames arrive in I420 through libvlc's video callbacks
 //     and are drawn by VideoView with a YUV shader; audio goes to PulseAudio by libVLC itself.
 //   * Demo: a test pattern and a fake clock, for host builds without libVLC (UI work, screenshots).
-// The hardware path (P2) will add a third one that drives the TV's decoder instead of producing frames.
+//   * Hardware (hw_playback.hpp): the TV decodes onto its video plane; subtitles come back as cues
+//     the screen draws (subtitle_cues), since VLC neither decodes nor blends them there.
 //
 // Threading: every method is called on the main thread. FrameSink is the one object shared with a
 // decoder thread.
 #pragma once
+
+#include "wnk/media/media.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -119,6 +122,15 @@ class Playback {
     virtual std::vector<TrackOption> video_tracks() const { return {}; }
     virtual int video_track() const { return -1; }
     virtual void set_video_track(int) {}
+
+    // ---- subtitles the screen draws (hardware path) ----
+    // The cues of the selected subtitle track showing now, with the subtitle delay applied. Empty
+    // when the engine draws subtitles into its own frames (software path) or none are showing.
+    virtual std::vector<std::shared_ptr<const wnk::media::SubtitleCue>> subtitle_cues() const { return {}; }
+    // ASS/SSA: the selected track's script header (empty: plain text) and the picture's size, which
+    // the script's coordinates are scaled from.
+    virtual std::string subtitle_ass_header() const { return {}; }
+    virtual std::pair<int, int> video_size() const { return {0, 0}; }
 
     // ---- timing ----
     virtual void set_audio_delay_ms(int64_t) {}
