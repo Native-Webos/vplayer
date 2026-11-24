@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/vlc_source.hpp"
 
+#include "player/dovi_detect.hpp"
 #include "player/subtitle_bitmap.hpp"
 #include "player/subtitle_text.hpp"
 #include "vlc_engine.hpp"
@@ -9,6 +10,7 @@
 
 #include "wnk/log.hpp"
 #include "wnk/media/bitstream.hpp"
+#include "wnk/media/dovi.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -170,6 +172,11 @@ VlcSource::~VlcSource() {
     if (media_ != nullptr) libvlc_media_release(media_);
 }
 
+std::string VlcSource::dovi_text() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return dovi_text_;
+}
+
 std::string VlcSource::audio_path_text() const {
     switch (audio_path_) {
         case media::AudioPath::Passthrough: return "as it is";
@@ -210,6 +217,13 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
     const libvlc_time_t d = libvlc_media_get_duration(media_);
     info_.duration_us = d > 0 ? d * 1000 : kNoTime;
     info_.seekable = !url || uri.rfind("file://", 0) == 0 || d > 0;
+
+    // Dolby Vision: VLC 3 does not report it; the configuration record is read from local files.
+    dovi_record_ = {};
+    if (!url && find_dovi_config(uri, &dovi_record_))
+        WNK_LOGI(kCat, "Dolby Vision record: profile %d, level %d, rpu %d el %d bl %d, compatibility %d",
+                 dovi_record_.profile, dovi_record_.level, dovi_record_.rpu, dovi_record_.el, dovi_record_.bl,
+                 dovi_record_.bl_compatibility);
 
     libvlc_media_track_t **tracks = nullptr;
     const unsigned n = libvlc_media_tracks_get(media_, &tracks);
@@ -315,6 +329,26 @@ bool VlcSource::select(int video_track, int audio_track, const media::BackendCap
         vf.frame_rate = video_->fps_den ? static_cast<double>(video_->fps_num) / video_->fps_den : 0;
         if (vf.frame_rate <= 0 && v != nullptr) vf.frame_rate = v->frame_rate;
         vf.colour = video_->colour;
+        if (video_->id == CodecId::Hevc) {
+            // Without a record, the first keyframe tells: RPUs, an enhancement layer.
+            DoviNals nals;
+            if (dovi_record_.profile < 0) {
+                auto first_video = [this] {
+                    return std::find_if(queue_.begin(), queue_.end(), [this](const Item &i) {
+                        return i.stream == video_ && i.key;
+                    });
+                };
+                cv_.wait_for(lock, std::chrono::seconds(2), [&] { return interrupted_ || first_video() != queue_.end(); });
+                const auto it = first_video();
+                if (it != queue_.end()) nals = scan_dovi_nals(it->data.data(), it->data.size());
+            }
+            const DoviPlan plan = dovi_plan(dovi_record_, nals, video_->colour, media::dovi_available());
+            vf.dolby_vision_profile = plan.profile;
+            dovi_convert_ = plan.convert_p7;
+            dovi_text_ = plan.how;
+            dovi_stats_ = {};
+            if (!plan.how.empty()) WNK_LOGI(kCat, "Dolby Vision: %s", plan.how.c_str());
+        }
         out->video = vf;
     }
     if (audio_ != nullptr) {
@@ -660,6 +694,21 @@ void VlcSource::to_packet(Item &item, media::Packet *out) {
             out->data = std::move(item.data);
         }
         if (hevc) media::hevc_strip_hdr10plus(&out->data);
+        if (hevc && dovi_convert_) {
+            const uint64_t dropped = dovi_stats_.rpu_dropped;
+            media::hevc_dovi_p7_to_p81(&out->data,
+                                       media::dovi_available() ? media::RpuRewrite(&media::dovi_rpu_to_p81)
+                                                               : media::RpuRewrite(),
+                                       &dovi_stats_);
+            const uint64_t n = dovi_stats_.rpu_converted + dovi_stats_.rpu_dropped;
+            if (n == 1 || n == 1000)
+                WNK_LOGI(kCat, "Dolby Vision Profile 7: %llu RPUs converted, %llu dropped, %llu enhancement-layer units removed",
+                         static_cast<unsigned long long>(dovi_stats_.rpu_converted),
+                         static_cast<unsigned long long>(dovi_stats_.rpu_dropped),
+                         static_cast<unsigned long long>(dovi_stats_.el_dropped));
+            if (dovi_stats_.rpu_dropped > dropped && dropped == 0)
+                WNK_LOGW(kCat, "Dolby Vision RPU dropped: %s", dovi_stats_.last_error.c_str());
+        }
     } else if (s->id == CodecId::Av1) {
         const bool has_td = item.data.size() >= 2 && (item.data[0] >> 3 & 0x0F) == 2;  // OBU_TEMPORAL_DELIMITER
         out->data = has_td ? std::move(item.data)
@@ -849,6 +898,7 @@ VlcSource::VlcSource(libvlc_instance_t *vlc, std::vector<std::string> options)
     : vlc_(vlc), options_(std::move(options)) {}
 VlcSource::~VlcSource() = default;
 std::string VlcSource::audio_path_text() const { return "none"; }
+std::string VlcSource::dovi_text() const { return {}; }
 bool VlcSource::open(const std::string &, std::string *error) {
     if (error) *error = "this build has no libVLC";
     return false;

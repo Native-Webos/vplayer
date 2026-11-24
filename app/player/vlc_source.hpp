@@ -31,6 +31,9 @@
 // VLC's decoder threads. interrupt() and the destructor unblock both.
 #pragma once
 
+#include "player/dovi_detect.hpp"
+
+#include "wnk/media/dovi.hpp"
 #include "wnk/media/media.hpp"
 
 #include <atomic>
@@ -68,6 +71,8 @@ class VlcSource final : public wnk::media::MediaSource {
     void reset_interrupt() override;
 
     std::string audio_path_text() const;  // "passthrough", "re-encoded to AC-3", "decoded to PCM"
+    // How Dolby Vision is played ("Profile 8.1 (configuration record)"), empty when it is not.
+    std::string dovi_text() const;
 
     // Subtitles, from the main thread (libVLC's player, which select() and seek() may replace on the
     // controller's threads, is held under its own lock while used).
@@ -130,6 +135,10 @@ class VlcSource final : public wnk::media::MediaSource {
     wnk::media::AudioPath audio_path_ = wnk::media::AudioPath::None;
     int want_video_ = -1, want_audio_ = -1;  // TrackInfo indexes (VLC es ids)
     int pcm_rate_ = 48000, pcm_channels_ = 2, ac3_channels_ = 6;
+    DoviConfig dovi_record_;            // from the file's header (open)
+    bool dovi_convert_ = false;         // Profile 7: strip the enhancement layer, RPUs to 8.1 (reader thread)
+    wnk::media::DoviStats dovi_stats_;  // reader thread
+    std::string dovi_text_;             // mu_
 
     mutable std::mutex mu_;
     std::condition_variable cv_;       // queue has packets / streams arrived / state changed
