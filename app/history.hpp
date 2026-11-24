@@ -30,6 +30,7 @@ struct HistoryEntry {
     int64_t length_ms = 0;
     int64_t played_at_s = 0;  // seconds since the epoch
     bool watched = false;
+    std::vector<int64_t> bookmarks_ms;  // positions the viewer marked, in order
 };
 
 // ---- pure (tested on the host) ----
@@ -38,7 +39,12 @@ constexpr int64_t kResumeMinMs = 30'000;
 // Whether `position` of `length` counts as having watched the file.
 bool is_watched(int64_t position_ms, int64_t length_ms);
 // Puts `e` first (replacing the entry of the same path); keeps at most kHistoryMax.
+// Puts `e` first (replacing the entry of the same path, whose bookmarks it keeps); at most kHistoryMax.
 void history_record(std::vector<HistoryEntry> *list, HistoryEntry e);
+// Adds a bookmark to `path`'s entry (creating it); a position within 2 s of one already there is
+// not added again. Returns false then.
+bool history_add_bookmark(std::vector<HistoryEntry> *list, const std::string &path, const std::string &name,
+                          int64_t position_ms);
 int64_t history_resume_ms(const std::vector<HistoryEntry> &list, const std::string &path);
 std::vector<HistoryEntry> history_continue(const std::vector<HistoryEntry> &list, size_t max);
 std::string history_json(const std::vector<HistoryEntry> &list);
@@ -58,6 +64,8 @@ class PlayHistory {
     void record(const HistoryEntry &e, wnk::async::WorkerPool &pool);
     void forget(const std::string &path, wnk::async::WorkerPool &pool);
     void restart(const std::string &path, wnk::async::WorkerPool &pool);  // resume point dropped
+    bool add_bookmark(const std::string &path, const std::string &name, int64_t position_ms, wnk::async::WorkerPool &pool);
+    std::vector<int64_t> bookmarks(const std::string &path) const;
     int64_t resume_ms(const std::string &path) const { return resume_ ? history_resume_ms(list_, path) : 0; }
     void set_resume(bool on) { resume_ = on; }  // Settings: "Continue where I stopped"
     std::vector<HistoryEntry> continue_list(size_t max) const { return history_continue(list_, max); }

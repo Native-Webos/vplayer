@@ -61,6 +61,20 @@ TEST("continue_list") {
     CHECK_EQ(history_continue(h, 1).size(), size_t{1});
 }
 
+TEST("bookmarks") {
+    std::vector<HistoryEntry> h;
+    CHECK(history_add_bookmark(&h, "/a.mkv", "a.mkv", 90'000));    // creates the entry
+    CHECK(history_add_bookmark(&h, "/a.mkv", "a.mkv", 30'000));
+    CHECK(!history_add_bookmark(&h, "/a.mkv", "a.mkv", 31'000));   // within 2 s of one
+    REQUIRE(h.size() == 1);
+    CHECK(h[0].bookmarks_ms == (std::vector<int64_t>{30'000, 90'000}));  // in order
+    history_record(&h, entry("/a.mkv", 600'000, 7'200'000));        // playing again keeps them
+    CHECK_EQ(h[0].bookmarks_ms.size(), size_t{2});
+    const auto back = history_from_json(history_json(h));
+    REQUIRE(back.size() == 1);
+    CHECK(back[0].bookmarks_ms == h[0].bookmarks_ms);
+}
+
 TEST("cap_and_json") {
     std::vector<HistoryEntry> h;
     for (int i = 0; i < 250; ++i) history_record(&h, entry("/f" + std::to_string(i), 60'000, 600'000));

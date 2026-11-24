@@ -496,6 +496,26 @@ class PlayerPanel : public View {
     }
 
     void build_playback(Ui &, Playback &p, PlayerSettings &st) {
+        if (p.seekable() && screen_.history() != nullptr) {
+            // Bookmarks: kept with the file's history entry; OK on one jumps there.
+            const std::string path = screen_.current().path;
+            section("BOOKMARKS");
+            rows_->add<ValueRow>("Add a bookmark here", clock_text(p.time_ms()), [this, path](Ui &ui) {
+                Playback *pb = screen_.playback();
+                if (pb == nullptr) return;
+                const int64_t at = pb->time_ms();
+                const bool added = screen_.history()->add_bookmark(path, screen_.current().name, at, screen_.pool());
+                ui.toast(added ? "Bookmark at " + clock_text(at) : "There is a bookmark there already.");
+                refresh(ui);
+            });
+            for (const int64_t b : screen_.history()->bookmarks(path)) {
+                rows_->add<ValueRow>("Bookmark", clock_text(b), [this, b](Ui &ui) {
+                    if (Playback *pb = screen_.playback()) pb->seek_ms(b);
+                    screen_.close_panel(ui);
+                });
+            }
+            section("POSITION");
+        }
         if (p.seekable()) {
             rows_->add<ValueRow>("Jump to time", clock_text(p.time_ms()), [this](Ui &ui) { ask_time(ui); });
             rows_->add<ValueRow>("Start from the beginning", "", [this](Ui &ui) {

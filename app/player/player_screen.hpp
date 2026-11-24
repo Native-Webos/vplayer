@@ -85,6 +85,8 @@ class PlayerScreen : public wnk::ui::Screen {
     void close_panel(wnk::ui::Ui &ui);
     void apply_speed();
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
+    PlayHistory *history() { return s_.history; }
+    wnk::async::WorkerPool &pool() { return s_.ctx->pool(); }
     void refresh_bar();
     // Stops playback (on a worker) and leaves the player.
     void close(wnk::ui::Ui &ui);
