@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <sys/stat.h>
 #include <utility>
 
 namespace vplayer {
@@ -438,6 +439,7 @@ class PlayerPanel : public View {
 
     void build_video(Ui &, Playback &p, PlayerSettings &st) {
         section("PICTURE");
+        if (p.can_snapshot()) rows_->add<ValueRow>("Take a snapshot", "To the USB drive", [this](Ui &ui) { screen_.take_snapshot(ui); });
         std::vector<std::string> aspects;
         for (int i = 0; i < static_cast<int>(AspectMode::Count); ++i) aspects.emplace_back(aspect_name(static_cast<AspectMode>(i)));
         rows_->add<Choice>("Aspect ratio", aspects, static_cast<int>(st.aspect), [this](Ui &, int i) {
@@ -827,6 +829,33 @@ void PlayerScreen::remember_position() {
     h.played_at_s = static_cast<int64_t>(std::time(nullptr));
     if (h.length_ms <= 0 && !ended_) return;  // a live stream: nothing to resume
     s_.history->record(h, s_.ctx->pool());
+}
+
+void PlayerScreen::take_snapshot(Ui &ui) {
+    if (!playback_) return;
+    // The first drive that can be written to, in a folder of its own.
+    const platform::RemovableVolume *target = nullptr;
+    const auto vols = media_volumes();
+    for (const auto &v : vols)
+        if (!v.read_only) {
+            target = &v;
+            break;
+        }
+    if (target == nullptr) {
+        ui.toast("Plug in a USB drive that can be written to, for snapshots.");
+        return;
+    }
+    const std::string folder = target->path + "/VPlayer snapshots";
+    ::mkdir(folder.c_str(), 0755);
+    char stamp[32];
+    const std::time_t now = std::time(nullptr);
+    std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H.%M.%S", std::localtime(&now));
+    const std::string file = folder + "/" + display_name(queue_[index_].name) + " " + clock_text(playback_->time_ms()) + " " + stamp + ".png";
+    std::string safe = file;
+    for (size_t i = folder.size() + 1; i < safe.size(); ++i)
+        if (safe[i] == ':' || safe[i] == '/') safe[i] = '.';  // FAT drives refuse ':'
+    const bool ok = playback_->snapshot(safe);
+    ui.toast(ok ? "Snapshot saved in \"VPlayer snapshots\" on " + target->name : "The snapshot could not be saved.");
 }
 
 void PlayerScreen::restart_file(Ui &ui) {

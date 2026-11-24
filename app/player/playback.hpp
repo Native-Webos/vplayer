@@ -182,6 +182,13 @@ class Playback {
     virtual bool can_filter_video() const { return false; }
     virtual void set_deinterlace(const std::string &) {}
     virtual void set_picture_adjust(const PictureAdjust &) {}
+    // A PNG of the picture showing now (the software path: the TV decoder's picture is out of
+    // reach). False when the engine cannot or the write failed.
+    virtual bool can_snapshot() const { return false; }
+    virtual bool snapshot(const std::string &png_path) {
+        (void)png_path;
+        return false;
+    }
 
     // ---- information ----
     // Label/value pairs for the Info tab ("Video", "H.264 1920×1080 · 23.976 fps").

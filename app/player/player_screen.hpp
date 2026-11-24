@@ -85,6 +85,7 @@ class PlayerScreen : public wnk::ui::Screen {
     void close_panel(wnk::ui::Ui &ui);
     void apply_speed();
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
+    void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }
     wnk::async::WorkerPool &pool() { return s_.ctx->pool(); }
     void refresh_bar();
