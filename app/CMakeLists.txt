@@ -19,7 +19,7 @@ include("${_kit}/cmake/WnkApp.cmake")
 
 add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
-        player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp)
+        player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp)
 # ../modules: the wnk_bridge contract (wnk_bridge/wnk_bridge.h) shared with our VLC stream output.
 target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../modules")
 # The kit's playback controller and the TV's decoders (Starfish, NDL; dlopened, never DT_NEEDED).
@@ -71,6 +71,14 @@ wnk_add_webos_package(
 wnk_add_app_test(NAME e2e.vplayer.player_opens TARGET vplayer PREFIX APP_VPLAYER
         ARGS "{\"play\":\"/nonexistent/Demo.mkv\"}"
         KEYS "wait@1500,Escape,wait@300,Escape,Escape" PASS "first frame shown")
+
+# Host unit tests (the kit's tiny harness): pure parts of the player.
+if (NOT WNK_WEBOS)
+    add_executable(test_subtitle_text tests/test_subtitle_text.cpp player/subtitle_text.cpp)
+    target_include_directories(test_subtitle_text PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_link_libraries(test_subtitle_text PRIVATE wnk_media)
+    add_test(NAME unit.vplayer.subtitle_text COMMAND test_subtitle_text)
+endif ()
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.
 wnk_add_app_test(NAME e2e.vplayer.starts_and_quits TARGET vplayer PREFIX APP_VPLAYER
