@@ -352,14 +352,25 @@ class PlayerPanel : public View {
         delay.set_description("Positive when the sound comes too early");
         std::vector<std::string> eq{"Off"};
         for (auto &n : p.equalizer_presets()) eq.push_back(n);
-        rows_->add<Choice>("Equalizer", eq, st.equalizer + 1, [this](Ui &, int i) {
+        section("EFFECTS");
+        rows_->add<Choice>("Equalizer", eq, st.equalizer + 1, [this](Ui &ui, int i) {
             screen_.settings().equalizer = i - 1;
-            screen_.playback()->set_equalizer(i - 1);
+            screen_.apply_effects(ui);
         });
-        rows_->add<Choice>("Volume boost", kVolumeNames, (st.volume - 100) / 25, [this](Ui &, int i) {
+        rows_->add<Choice>("Volume boost", kVolumeNames, (st.volume - 100) / 25, [this](Ui &ui, int i) {
             screen_.settings().volume = 100 + i * 25;
-            screen_.playback()->set_volume_percent(screen_.settings().volume);
+            screen_.apply_effects(ui);
         });
+        rows_->add<Toggle>("Normalise loudness", st.normalize, [this](Ui &ui, bool on) {
+            screen_.settings().normalize = on;
+            screen_.apply_effects(ui);
+        });
+        rows_->add<Toggle>("Wider stereo", st.widen, [this](Ui &ui, bool on) {
+            screen_.settings().widen = on;
+            screen_.apply_effects(ui);
+        });
+        if (p.video_plane() && st.effects().active())
+            rows_->add<ValueRow>("With effects on", "the TV gets decoded stereo PCM", [](Ui &) {});
     }
 
     void build_subtitles(Ui &, Playback &p, PlayerSettings &st) {
@@ -797,7 +808,7 @@ void PlayerScreen::on_hide(Ui &ui) {
 void PlayerScreen::start(Ui &ui) {
     if (queue_.empty()) return;
     const auto &e = queue_[index_];
-    playback_ = open_(e, software_);
+    playback_ = open_(e, software_, settings_.effects());
     if (!playback_) {
         ui.toast("Cannot open " + e.name);
         return;
@@ -918,13 +929,21 @@ void PlayerScreen::apply_session() {
     // What carries over from the previous file, once this one plays (track lists exist by then).
     applied_ = true;
     apply_speed();
-    if (settings_.equalizer >= 0) playback_->set_equalizer(settings_.equalizer);
-    if (settings_.volume != 100) playback_->set_volume_percent(settings_.volume);
+    playback_->apply_audio_effects(settings_.effects());  // live parts (the rest came with the open)
     if (settings_.deinterlace > 0) playback_->set_deinterlace(kDeinterlace[settings_.deinterlace]);
     if (settings_.adjust.enabled) playback_->set_picture_adjust(settings_.adjust);
     video_->set_aspect(settings_.aspect);
     video_->set_zoom(settings_.zoom / 100.0f);
     playback_->set_picture_area(static_cast<int>(settings_.aspect), settings_.zoom / 100.0f);
+}
+
+void PlayerScreen::apply_effects(Ui &ui) {
+    if (!playback_ || playback_->apply_audio_effects(settings_.effects())) return;
+    // The engine takes them at open: the same file again, from here.
+    start_at_ms_ = playback_->time_ms();
+    ui.toast("Applying the audio effects…");
+    stop_current();
+    start(ui);
 }
 
 void PlayerScreen::apply_speed() {

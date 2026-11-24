@@ -272,7 +272,8 @@ class App : public wnk::app::Delegate {
     // A player for one file: on the TV the hardware path (libVLC demuxes, the TV decodes) for video
     // unless `software` or the "decoder" launch parameter says otherwise; libVLC's own decoders for
     // the rest; the demo engine in host builds without libVLC.
-    std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e, bool software) {
+    std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e, bool software,
+                                                     const vplayer::AudioEffects &effects = {}) {
         const bool audio_only = e.kind == wnk::platform::FileKind::Audio;
         const bool hw = engine_ && hw_available_ && !software && !audio_only && decoder_ != "software";
         // Disc images start at the main film, not at the disc's menu, which the remote cannot
@@ -287,7 +288,7 @@ class App : public wnk::app::Delegate {
             WNK_LOGI(kCat, "engine: hardware (TV decoder) for %s", e.name.c_str());
             auto hw = hw_;
             hw.force_pcm = settings_.audio_pcm;
-            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw, base);
+            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw, base, effects);
         }
         if (engine_) {
             WNK_LOGI(kCat, "engine: software (libVLC) for %s", e.name.c_str());
@@ -298,7 +299,7 @@ class App : public wnk::app::Delegate {
             options.push_back(":freetype-rel-fontsize=" + std::to_string(rel[std::clamp(settings_.subtitle_size, 0, 3)]));
             if (settings_.subtitle_box) options.push_back(":freetype-background-opacity=160");
             if (settings_.subtitle_colour == 1) options.push_back(":freetype-color=16776960");  // 0xFFFF00
-            return vplayer::open_vlc_playback(engine_->instance(), e.path, options);
+            return vplayer::open_vlc_playback(engine_->instance(), e.path, options, effects);
         }
         if (vlc_info_ && !vlc_info_->available) return vplayer::open_demo_playback();
         return nullptr;
@@ -342,7 +343,9 @@ class App : public wnk::app::Delegate {
         // A player already open (a relaunch with "play", or a file opened from elsewhere) is replaced.
         if (auto *open_player = dynamic_cast<vplayer::PlayerScreen *>(nav_->top())) open_player->close(ui);
         auto player = std::make_unique<vplayer::PlayerScreen>(
-            services_, *nav_, [this](const wnk::platform::FileEntry &f, bool sw) { return open_playback(f, sw); }, std::move(queue),
+            services_, *nav_, [this](const wnk::platform::FileEntry &f, bool sw, const vplayer::AudioEffects &fx) {
+                return open_playback(f, sw, fx);
+            }, std::move(queue),
             index);
         if (pending_panel_ >= 0) player->open_panel_when_playing(pending_panel_);
         if (pending_at_ms_ >= 0) player->start_at(pending_at_ms_);

@@ -32,6 +32,7 @@
 #pragma once
 
 #include "player/dovi_detect.hpp"
+#include "player/playback.hpp"
 
 #include "wnk/media/dovi.hpp"
 #include "wnk/media/media.hpp"
@@ -78,6 +79,8 @@ class VlcSource final : public wnk::media::MediaSource {
     void set_audio_delay_us(int64_t us) { audio_delay_us_.store(us); }
     // Always give the TV decoded PCM (Settings: audio "Decoded"), from the next select().
     void set_force_pcm(bool on) { force_pcm_.store(on); }
+    // VLC's audio filters on the way to the TV (decoded PCM then), from the next select().
+    void set_audio_effects(const AudioEffects &fx) { effects_ = fx; }
     // Every SubRip line as an ASS event too (Settings: a subtitle colour other than white).
     void set_subrip_all_ass(bool on) { subrip_all_ass_.store(on); }
 
@@ -167,6 +170,7 @@ class VlcSource final : public wnk::media::MediaSource {
     std::atomic<int64_t> audio_delay_us_{0};
     std::atomic<bool> force_pcm_{false};
     std::atomic<bool> subrip_all_ass_{false};
+    AudioEffects effects_;  // set before open (controller threads read it in select)
     // Reader thread (select() runs while it is parked): the stretcher and its timeline.
     std::unique_ptr<wnk::media::TimeStretch> stretch_;
     int64_t stretch_base_us_ = wnk::media::kNoTime, stretch_in_us_ = wnk::media::kNoTime, stretch_frames_ = 0;

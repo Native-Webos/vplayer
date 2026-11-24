@@ -51,7 +51,8 @@ std::string track_name(const media::TrackInfo &t) {
 class HwPlayback final : public Playback {
  public:
     HwPlayback(libvlc_instance_t *vlc, const std::string &path, wnk::async::MainDispatcher &main,
-               const HwOptions &options, std::vector<std::string> vlc_options) {
+               const HwOptions &options, std::vector<std::string> vlc_options, const AudioEffects &effects)
+        : effects_(effects) {
         auto backend = make_backend(options);
         if (!backend) {
             error_ = "no hardware decoder";
@@ -62,6 +63,7 @@ class HwPlayback final : public Playback {
         po.autoplay = true;
         auto source = std::make_unique<VlcSource>(vlc, std::move(vlc_options));
         source->set_force_pcm(options.force_pcm);
+        source->set_audio_effects(effects);
         source_ = source.get();  // owned by the controller, which outlives every use here
         controller_ = std::make_unique<media::PlaybackController>(std::move(source), std::move(backend), main, po);
         controller_->set_state_callback([this](media::PlayState from, media::PlayState to,
@@ -194,6 +196,10 @@ class HwPlayback final : public Playback {
     }
     bool add_subtitle_file(const std::string &path) override { return controller_ && source_->add_subtitle_file(path); }
     void set_subtitle_delay_ms(int64_t ms) override { subtitle_delay_us_ = ms * 1000; }
+    // VLC filters the audio before the TV gets it: another set of effects needs the file reopened.
+    std::vector<std::string> equalizer_presets() const override { return equalizer_preset_labels(); }
+    bool apply_audio_effects(const AudioEffects &fx) override { return fx == effects_; }
+
     // Shifts the audio packets fed from now on; what the decoder holds plays as it was.
     void set_audio_delay_ms(int64_t ms) override {
         if (controller_) source_->set_audio_delay_us(ms * 1000);
@@ -323,6 +329,7 @@ class HwPlayback final : public Playback {
     std::chrono::steady_clock::time_point next_sync_{};
     int64_t subtitle_delay_us_ = 0;
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
+    AudioEffects effects_;  // what this file was opened with
     int area_mode_ = 0;  // AspectMode: Fit
     float area_zoom_ = 1;
     float look_scale_ = 0.055f;
@@ -376,9 +383,9 @@ bool hw_playback_available(std::string *why) {
 
 std::unique_ptr<Playback> open_hw_playback(libvlc_instance_t *vlc, const std::string &path,
                                            wnk::async::MainDispatcher &main, const HwOptions &options,
-                                           std::vector<std::string> vlc_options) {
+                                           std::vector<std::string> vlc_options, const AudioEffects &effects) {
     if (vlc == nullptr) return nullptr;
-    return std::make_unique<HwPlayback>(vlc, path, main, options, std::move(vlc_options));
+    return std::make_unique<HwPlayback>(vlc, path, main, options, std::move(vlc_options), effects);
 }
 
 }  // namespace vplayer

@@ -43,6 +43,6 @@ bool hw_playback_available(std::string *why = nullptr);
 
 std::unique_ptr<Playback> open_hw_playback(libvlc_instance_t *vlc, const std::string &path,
                                            wnk::async::MainDispatcher &main, const HwOptions &options,
-                                           std::vector<std::string> vlc_options = {});
+                                           std::vector<std::string> vlc_options = {}, const AudioEffects &effects = {});
 
 }  // namespace vplayer

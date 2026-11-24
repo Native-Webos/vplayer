@@ -89,6 +89,22 @@ struct Title {
     bool menu = false;
 };
 
+// Audio effects (VLC's audio filters). Neutral: no equalizer, 100 %, nothing else.
+struct AudioEffects {
+    int equalizer = -1;      // preset index (libVLC's order: flat, classical, club, ...), -1 off
+    int volume = 100;        // percent, up to 200
+    bool normalize = false;  // VLC's normvol: steadier loudness
+    bool widen = false;      // VLC's stereo_widen
+    bool active() const { return equalizer >= 0 || volume != 100 || normalize || widen; }
+    bool operator==(const AudioEffects &o) const {
+        return equalizer == o.equalizer && volume == o.volume && normalize == o.normalize && widen == o.widen;
+    }
+    bool operator!=(const AudioEffects &o) const { return !(*this == o); }
+};
+// VLC's equalizer preset names and people's names for them, in libVLC's order.
+const char *vlc_equalizer_preset(int index);
+std::vector<std::string> equalizer_preset_labels();
+
 // Picture adjustments (VLC's "adjust" filter). Neutral values: 1, 1, 1, 1, 0.
 struct PictureAdjust {
     bool enabled = false;
@@ -176,6 +192,12 @@ class Playback {
     virtual std::vector<std::string> equalizer_presets() const { return {}; }
     virtual void set_equalizer(int /*preset, -1 off*/) {}
     virtual void set_volume_percent(int) {}  // 100 = unchanged, up to 200
+    // Applies `fx` to what plays now if the engine can without reopening; false when the file must be
+    // opened again with them (the TV decoder path: VLC filters the audio before the TV gets it).
+    virtual bool apply_audio_effects(const AudioEffects &fx) {
+        (void)fx;
+        return true;
+    }
 
     // ---- video ----
     // VLC's deinterlace modes ("yadif", "bob", ...); empty turns deinterlacing off.
@@ -197,8 +219,9 @@ class Playback {
 
 // libVLC software playback of a local path or URL; nullptr if libVLC is not in this build.
 // `options` are per-media libVLC options (":no-audio", ":avcodec-threads=4"), for experiments.
+// `effects`: normalise and widen are VLC audio filters set at open; equalizer and volume apply live.
 std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *vlc, const std::string &mrl,
-                                            const std::vector<std::string> &options = {});
+                                            const std::vector<std::string> &options = {}, const AudioEffects &effects = {});
 // A test pattern with a two-hour fake clock.
 std::unique_ptr<Playback> open_demo_playback();
 

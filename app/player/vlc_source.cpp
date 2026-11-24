@@ -294,8 +294,16 @@ std::string VlcSource::sout_chain() const {
         return "#transcode{acodec=a52,ab=640,channels=" + std::to_string(ac3_channels_) + ",samplerate=48000}:" + sink;
     }
     if (want_audio_ >= 0 && audio_path_ == media::AudioPath::Pcm) {
+        // The viewer's audio effects run in the transcode's filter chain (their settings are media
+        // options: start_player).
+        std::string filters;
+        auto add = [&filters](const char *f) { filters += (filters.empty() ? "" : ":") + std::string(f); };
+        if (effects_.equalizer >= 0) add("equalizer");
+        if (effects_.normalize) add("normvol");
+        if (effects_.widen) add("stereo_widen");
+        if (effects_.volume != 100) add("gain");
         return "#transcode{acodec=s16l,channels=" + std::to_string(pcm_channels_) +
-               ",samplerate=" + std::to_string(pcm_rate_) + "}:" + sink;
+               ",samplerate=" + std::to_string(pcm_rate_) + (filters.empty() ? "" : ",afilter=\"" + filters + "\"") + "}:" + sink;
     }
     return "#" + sink;
 }
@@ -316,7 +324,7 @@ bool VlcSource::select(int video_track, int audio_track, const media::BackendCap
     if (a != nullptr) {
         audio_path_ = media::audio_path(caps, *a);
         const double speed = speed_.load();
-        if (force_pcm_.load() && audio_path_ != media::AudioPath::Pcm) {
+        if ((force_pcm_.load() || effects_.active()) && audio_path_ != media::AudioPath::Pcm) {
             if (!caps.accepts(CodecId::PcmS16)) {
                 if (error) *error = "the TV decoder takes no PCM";
                 return false;
@@ -423,6 +431,10 @@ bool VlcSource::start_player(std::string *error) {
     // The media's own timestamps: VLC 3 converts a sout's to its playback clock, which restarts
     // at every seek (libvlc/patches/vlc/0004 adds the option).
     libvlc_media_add_option(m, ":sout-stream-time");
+    if (effects_.equalizer >= 0)
+        libvlc_media_add_option(m, (std::string(":equalizer-preset=") + vlc_equalizer_preset(effects_.equalizer)).c_str());
+    if (effects_.volume != 100)
+        libvlc_media_add_option(m, (":gain-value=" + std::to_string(effects_.volume / 100.0)).c_str());
     // Only the selected streams (VLC 3 streams every one by default, transcoding each audio track).
     libvlc_media_add_option(m, ":no-sout-all");
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway

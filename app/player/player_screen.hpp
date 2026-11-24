@@ -43,6 +43,9 @@ struct PlayerSettings {
     int64_t audio_delay_ms = 0, subtitle_delay_ms = 0;  // reset per file
     int equalizer = -1;          // preset index, -1 off
     int volume = 100;            // percent, up to 200
+    bool normalize = false;      // steadier loudness (VLC's normvol)
+    bool widen = false;          // wider stereo (VLC's stereo_widen)
+    AudioEffects effects() const { return {equalizer, volume, normalize, widen}; }
     AspectMode aspect = AspectMode::Fit;
     int zoom = 100;              // percent
     int deinterlace = 0;         // index into kDeinterlace
@@ -58,7 +61,8 @@ struct PlayerSettings {
 class PlayerScreen : public wnk::ui::Screen {
  public:
     // Opens a file: the hardware path unless `software` (the TV refused it, or software is forced).
-    using Opener = std::function<std::unique_ptr<Playback>(const wnk::platform::FileEntry &, bool software)>;
+    using Opener = std::function<std::unique_ptr<Playback>(const wnk::platform::FileEntry &, bool software,
+                                                             const AudioEffects &effects)>;
 
     // `queue` is the folder's playable files and `index` the one to start with.
     PlayerScreen(Services &services, wnk::ui::Navigator &nav, Opener open, std::vector<wnk::platform::FileEntry> queue,
@@ -84,6 +88,8 @@ class PlayerScreen : public wnk::ui::Screen {
     void open_panel(wnk::ui::Ui &ui, int tab);
     void close_panel(wnk::ui::Ui &ui);
     void apply_speed();
+    // The audio effects changed: applied live where the engine can, else the file reopens here.
+    void apply_effects(wnk::ui::Ui &ui);
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }

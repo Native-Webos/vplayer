@@ -264,6 +264,15 @@ class VlcPlayback final : public Playback {
             libvlc_audio_equalizer_release(eq);
         }
     }
+    void opened_with(const AudioEffects &fx) { opened_ = fx; }
+    // Equalizer and volume change live; normalise and widen are filters chosen at open.
+    bool apply_audio_effects(const AudioEffects &fx) override {
+        if (fx.normalize != opened_.normalize || fx.widen != opened_.widen) return false;
+        set_equalizer(fx.equalizer);
+        set_volume_percent(fx.volume);
+        return true;
+    }
+
     void set_volume_percent(int v) override {
         if (mp_) libvlc_audio_set_volume(mp_, std::clamp(v, 0, 200));
     }
@@ -418,6 +427,7 @@ class VlcPlayback final : public Playback {
 
     libvlc_media_player_t *mp_ = nullptr;
     std::shared_ptr<FrameSink> sink_;
+    AudioEffects opened_;
     // Frame-drop diagnosis (RESEARCH.md §10): display callbacks counted on VLC's thread, reported
     // with libVLC's own statistics every 5 seconds while playing.
     std::atomic<int64_t> last_display_us_{0}, max_gap_us_{0};
@@ -431,14 +441,22 @@ class VlcPlayback final : public Playback {
 }  // namespace
 
 std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *vlc, const std::string &mrl,
-                                            const std::vector<std::string> &options) {
+                                            const std::vector<std::string> &options, const AudioEffects &effects) {
     if (vlc == nullptr) return nullptr;
-    return std::make_unique<VlcPlayback>(vlc, mrl, options);
+    auto opts = options;
+    std::string filters;
+    if (effects.normalize) filters += "normvol";
+    if (effects.widen) filters += std::string(filters.empty() ? "" : ":") + "stereo_widen";
+    if (!filters.empty()) opts.push_back(":audio-filter=" + filters);
+    auto p = std::make_unique<VlcPlayback>(vlc, mrl, opts);
+    p->opened_with(effects);
+    return p;
 }
 
 #else
 
-std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *, const std::string &, const std::vector<std::string> &) {
+std::unique_ptr<Playback> open_vlc_playback(libvlc_instance_t *, const std::string &, const std::vector<std::string> &,
+                                            const AudioEffects &) {
     return nullptr;
 }
 
