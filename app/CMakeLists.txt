@@ -17,7 +17,9 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp)
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp
+        player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
+        player/player_screen.cpp)
 target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(vplayer PRIVATE wnk_app)
 target_include_directories(vplayer SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")  # nlohmann/json.hpp
@@ -62,6 +64,11 @@ wnk_add_webos_package(
         ICON_COLOR "#e85d04"
         EXPECTED_NEEDED "${CMAKE_CURRENT_SOURCE_DIR}/expected-needed.txt"
         EXTRA_DIRS "${VPLAYER_FONT_DIR}" "${VPLAYER_ICON_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
+
+# Host: the player opens (demo engine), shows its first frame and closes with Back.
+wnk_add_app_test(NAME e2e.vplayer.player_opens TARGET vplayer PREFIX APP_VPLAYER
+        ARGS "{\"play\":\"/nonexistent/Demo.mkv\"}"
+        KEYS "wait@1500,Escape,wait@300,Escape,Escape" PASS "first frame shown")
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.
 wnk_add_app_test(NAME e2e.vplayer.starts_and_quits TARGET vplayer PREFIX APP_VPLAYER

@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// The full-screen player: the video, a title line, a floating control bar, and a side panel with
+// VLC's controls (mockups "3 · Player controls" and "4 · Audio, subtitles, speed").
+//
+//   Bar:   previous / next file in the folder · −10 s · play/pause · +10 s ·
+//          Audio · Subtitles · speed · Picture · More          plus chapter name and "Ends at"
+//   Panel: Audio     track, delay, equalizer, volume boost
+//          Subtitles track (or off), delay, load a subtitle file from the folder
+//          Video     aspect ratio, zoom, deinterlace, picture adjustments, video track
+//          Playback  speed, chapters, A-B repeat, repeat, play next automatically, sleep timer
+//          Info      codecs, sizes, bitrates, frames shown and dropped
+//
+// Remote, controls hidden: Left/Right skip 10 s, OK pauses, Up/Down show the controls.
+// Any time: Play/Pause, Rewind/FastForward (30 s), Channel +/- (next/previous file), colour keys
+// (red: info, green: speed, yellow: subtitles, blue: audio), Stop/Back leave (Back closes the panel
+// first).
+#pragma once
+
+#include "pages.hpp"
+#include "player/playback.hpp"
+#include "player/video_view.hpp"
+
+#include "wnk/app/wake_lock.hpp"
+#include "wnk/platform/files.hpp"
+#include "wnk/ui/navigation.hpp"
+
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace vplayer {
+
+class SeekBar;
+class PlayPauseButton;
+class PlayerPanel;
+class PillButton;
+
+// Settings that stay for the whole player session (they carry over to the next file).
+struct PlayerSettings {
+    int64_t audio_delay_ms = 0, subtitle_delay_ms = 0;  // reset per file
+    int equalizer = -1;          // preset index, -1 off
+    int volume = 100;            // percent, up to 200
+    AspectMode aspect = AspectMode::Fit;
+    int zoom = 100;              // percent
+    int deinterlace = 0;         // index into kDeinterlace
+    PictureAdjust adjust;
+    int speed = 3;               // index into kSpeeds (1×)
+    int repeat = 0;              // 0 off, 1 this file, 2 folder
+    bool autoplay = true;        // next file in the folder when one ends
+    int sleep = 0;               // index into the sleep choices
+    float sleep_left_s = 0;      // counting down when > 0
+    int64_t a_ms = -1, b_ms = -1;  // A-B repeat
+};
+
+class PlayerScreen : public wnk::ui::Screen {
+ public:
+    using Opener = std::function<std::unique_ptr<Playback>(const wnk::platform::FileEntry &)>;
+
+    // `queue` is the folder's playable files and `index` the one to start with.
+    PlayerScreen(Services &services, wnk::ui::Navigator &nav, Opener open, std::vector<wnk::platform::FileEntry> queue,
+                 size_t index);
+    ~PlayerScreen() override;
+
+    void on_show(wnk::ui::Ui &ui) override;
+    bool on_back(wnk::ui::Ui &ui) override;
+    bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
+    void update(wnk::ui::Ui &ui, float dt) override;
+
+    // ---- used by the controls and the panel ----
+    Playback *playback() { return playback_.get(); }
+    PlayerSettings &settings() { return settings_; }
+    VideoView &video() { return *video_; }
+    const wnk::platform::FileEntry &current() const { return queue_[index_]; }
+    void toggle_pause(wnk::ui::Ui &ui);
+    void skip(wnk::ui::Ui &ui, int64_t delta_ms);
+    void go_to(wnk::ui::Ui &ui, int delta);  // next (+1) / previous (-1) file
+    bool has_next() const { return index_ + 1 < queue_.size(); }
+    bool has_previous() const { return index_ > 0; }
+    void open_panel(wnk::ui::Ui &ui, int tab);
+    void close_panel(wnk::ui::Ui &ui);
+    void apply_speed();
+    void refresh_bar();
+    // Opens the panel on `tab` (0 audio … 4 info) once the file plays: launch parameter "panel".
+    void open_panel_when_playing(int tab) { pending_panel_ = tab; }
+
+ protected:
+    void on_descendant_focused(wnk::ui::Ui &ui, View *child, View *focused) override;
+
+ private:
+    void start(wnk::ui::Ui &ui);           // opens queue_[index_]
+    void stop_current();                   // releases the playback on a worker
+    void apply_session();                  // settings that carry over, once the file plays
+    void show_controls(wnk::ui::Ui &ui, bool focus_play);
+    void hide_controls(wnk::ui::Ui &ui);
+    void ended(wnk::ui::Ui &ui);
+    void close(wnk::ui::Ui &ui);
+
+    Services &s_;
+    wnk::ui::Navigator &nav_;
+    Opener open_;
+    std::vector<wnk::platform::FileEntry> queue_;
+    size_t index_;
+    std::unique_ptr<Playback> playback_;
+    PlayerSettings settings_;
+    wnk::app::WakeLock wake_;
+
+    VideoView *video_ = nullptr;
+    View *catcher_ = nullptr;   // takes focus while the controls are hidden (no visible ring)
+    View *overlay_ = nullptr;
+    PlayerPanel *panel_ = nullptr;
+    View *panel_opener_ = nullptr;  // focus returns here when the panel closes
+    wnk::ui::Label *title_ = nullptr, *subtitle_ = nullptr;
+    wnk::ui::Label *time_ = nullptr, *length_ = nullptr, *format_ = nullptr;
+    wnk::ui::Label *chapter_ = nullptr, *ends_ = nullptr;
+    wnk::ui::Spinner *spinner_ = nullptr;
+    SeekBar *seek_ = nullptr;
+    PlayPauseButton *play_ = nullptr;
+    PillButton *speed_btn_ = nullptr;
+    View *prev_btn_ = nullptr, *next_btn_ = nullptr;
+    float idle_s_ = 0;
+    float overlay_alpha_ = 1, overlay_target_ = 1;
+    float clock_s_ = 0;
+    bool controls_ = true;
+    bool closing_ = false;
+    bool applied_ = false;     // apply_session ran for this file
+    bool reported_ = false;
+    int pending_panel_ = -1;
+};
+
+}  // namespace vplayer

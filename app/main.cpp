@@ -8,6 +8,7 @@
 // on a worker while the UI comes up; Settings shows what it reported.
 #include "library.hpp"
 #include "pages.hpp"
+#include "player/player_screen.hpp"
 #include "ui/theme.hpp"
 #include "vlc_engine.hpp"
 
@@ -151,10 +152,7 @@ class App : public wnk::app::Delegate {
         services_.ctx = &ctx;
         services_.show_tab = [this, &ctx](Tab t) { main_->go(ctx.ui(), t); };
         services_.browse_to = [this, &ctx](const std::string &folder) { main_->browse_to(ctx.ui(), folder); };
-        services_.play = [&ctx](const wnk::platform::FileEntry &e) {
-            WNK_LOGI(kCat, "play requested: %s", e.path.c_str());
-            ctx.ui().toast("Playback is the next step: \"" + vplayer::display_name(e.name) + "\"");
-        };
+        services_.play = [this, &ctx](const wnk::platform::FileEntry &e) { play(ctx.ui(), e); };
 
         nav_ = &ui.root().add<Navigator>();
         auto main = std::make_unique<MainScreen>(services_, [this](Ui &u) { show_about(u); });
@@ -171,9 +169,14 @@ class App : public wnk::app::Delegate {
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info);
                 return r;
             },
-            [this](EngineResult r) {
+            [this, &ctx](EngineResult r) {
                 engine_ = std::move(r.engine);
                 vlc_info_ = std::move(r.info);
+                if (pending_play_) {  // a {"play": ...} launch waited for the engine
+                    auto e = *pending_play_;
+                    pending_play_.reset();
+                    play(ctx.ui(), e);
+                }
             });
         WNK_LOGI(kCat, "started");
     }
@@ -188,11 +191,77 @@ class App : public wnk::app::Delegate {
     }
 
  private:
+    // A player for one file: libVLC when this build has it, else the demo engine (host builds).
+    std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e) {
+        if (engine_) return vplayer::open_vlc_playback(engine_->instance(), e.path, vlc_options_);
+        if (vlc_info_ && !vlc_info_->available) return vplayer::open_demo_playback();
+        return nullptr;
+    }
+
+    // Opens the player on `e`, with the playable files of its folder as the queue (previous/next,
+    // play the next file automatically).
+    void play(Ui &ui, const wnk::platform::FileEntry &e) {
+        WNK_LOGI(kCat, "play: %s", e.path.c_str());
+        if (!engine_ && !vlc_info_) {
+            ui.toast("The player is still starting. Try again in a moment.");
+            return;
+        }
+        std::vector<wnk::platform::FileEntry> queue;
+        size_t index = 0;
+        std::vector<wnk::platform::FileEntry> entries;
+        std::string err;
+        const std::string folder = e.path.substr(0, e.path.rfind('/'));
+        if (wnk::platform::list_folder(folder, &entries, &err, 5000)) {
+            for (auto &x : entries) {
+                const bool disc = x.kind == wnk::platform::FileKind::Other &&
+                                  (vplayer::extension_upper(x.name) == "ISO" || vplayer::extension_upper(x.name) == "IMG");
+                if (x.kind != wnk::platform::FileKind::Video && x.kind != wnk::platform::FileKind::Audio && !disc) continue;
+                if (x.path == e.path) index = queue.size();
+                queue.push_back(std::move(x));
+            }
+        }
+        if (queue.empty() || queue[index].path != e.path) {
+            queue.assign(1, e);
+            index = 0;
+        }
+        auto player = std::make_unique<vplayer::PlayerScreen>(
+            services_, *nav_, [this](const wnk::platform::FileEntry &f) { return open_playback(f); }, std::move(queue),
+            index);
+        if (pending_panel_ >= 0) player->open_panel_when_playing(pending_panel_);
+        pending_panel_ = -1;
+        nav_->push(ui, std::move(player));
+    }
+
     // Launch parameters (SAM's JSON): {"browse": "/tmp/usb/sda/sda1/Movies"} opens Browse there.
     void apply_launch_params(wnk::app::Context &ctx, const std::string &params_json) {
         if (params_json.empty()) return;
         const auto j = nlohmann::json::parse(params_json, nullptr, false);
         if (!j.is_object()) return;
+        // {"vlcOptions": [":no-audio", ...]}: per-media libVLC options for the next plays (debugging).
+        vlc_options_.clear();
+        if (auto it = j.find("vlcOptions"); it != j.end() && it->is_array()) {
+            for (const auto &o : *it)
+                if (o.is_string()) vlc_options_.push_back(o.get<std::string>());
+        }
+        // {"panel": "audio" | "subtitles" | "video" | "playback" | "info"}: open the player's panel on
+        // that tab once the file plays (with "play"; for checking the panel on a TV without a remote).
+        if (auto it = j.find("panel"); it != j.end() && it->is_string()) {
+            const std::string t = it->get<std::string>();
+            const char *tabs[] = {"audio", "subtitles", "video", "playback", "info"};
+            for (int i = 0; i < 5; ++i)
+                if (t == tabs[i]) pending_panel_ = i;
+        }
+        if (auto it = j.find("play"); it != j.end() && it->is_string()) {
+            // {"play": "/tmp/usb/sda/sda1/Film.mkv"}: straight into the player (also for testing).
+            wnk::platform::FileEntry e;
+            e.path = it->get<std::string>();
+            e.name = e.path.substr(e.path.rfind('/') + 1);
+            if (vlc_info_) {
+                play(ctx.ui(), e);  // the engine is up (a relaunch)
+            } else {
+                pending_play_ = e;  // played when the engine reports
+            }
+        }
         if (auto it = j.find("browse"); it != j.end() && it->is_string()) {
             WNK_LOGI(kCat, "launch: browse %s", it->get<std::string>().c_str());
             main_->browse_to(ctx.ui(), it->get<std::string>());
@@ -222,6 +291,9 @@ class App : public wnk::app::Delegate {
     MainScreen *main_ = nullptr;
     std::shared_ptr<vplayer::VlcEngine> engine_;
     std::optional<vplayer::VlcInfo> vlc_info_;
+    std::optional<wnk::platform::FileEntry> pending_play_;
+    std::vector<std::string> vlc_options_;
+    int pending_panel_ = -1;
 };
 
 }  // namespace
