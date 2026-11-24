@@ -32,6 +32,7 @@
 #pragma once
 
 #include "player/cea608.hpp"
+#include "player/cea708.hpp"
 #include "player/dovi_detect.hpp"
 #include "player/playback.hpp"
 
@@ -87,8 +88,10 @@ class VlcSource final : public wnk::media::MediaSource {
     void set_audio_preference(std::function<bool(const std::string &)> accept) { prefer_audio_ = std::move(accept); }
     // CEA-608 closed captions found in the video (the first packets are looked at), and drawing
     // them as subtitle track kClosedCaptionsTrack instead of libVLC's subtitles.
-    static constexpr int kClosedCaptionsTrack = 9990;
+    static constexpr int kClosedCaptionsTrack = 9990;     // CEA-608 CC1
+    static constexpr int kClosedCaptions708Track = 9991;  // CEA-708 service 1
     bool has_closed_captions() const;
+    bool has_closed_captions_708() const;
     void set_closed_captions(bool on);
 
     // Every SubRip line as an ASS event too (Settings: a subtitle colour other than white).
@@ -194,7 +197,12 @@ class VlcSource final : public wnk::media::MediaSource {
     int cc_cues_ = 0;  // made since captions were turned on (the first is logged)
     int cc_checked_ = 0;
     std::unique_ptr<Cea608Decoder> cc_;
-    std::map<int64_t, std::vector<std::pair<uint8_t, uint8_t>>> cc_reorder_;
+    std::unique_ptr<Cea708Decoder> cc708_;  // made when 708 data first shows
+    struct CcData {
+        std::vector<std::pair<uint8_t, uint8_t>> cc608;
+        std::vector<Cc708Pair> cc708;
+    };
+    std::map<int64_t, CcData> cc_reorder_;
     // Reader thread (select() runs while it is parked): the stretcher and its timeline.
     std::unique_ptr<wnk::media::TimeStretch> stretch_;
     int64_t stretch_base_us_ = wnk::media::kNoTime, stretch_in_us_ = wnk::media::kNoTime, stretch_frames_ = 0;

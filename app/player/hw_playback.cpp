@@ -188,16 +188,19 @@ class HwPlayback final : public Playback {
             out.push_back({t.id, name});
         }
         if (source_->has_closed_captions()) out.push_back({VlcSource::kClosedCaptionsTrack, "Closed captions (CC1)"});
+        if (source_->has_closed_captions_708())
+            out.push_back({VlcSource::kClosedCaptions708Track, "Closed captions (CEA-708)"});
         return out;
     }
     // libVLC's selection (the controller follows it within tick()'s period).
     int subtitle_track() const override {
         if (!controller_) return -1;
-        return cc_selected_ ? VlcSource::kClosedCaptionsTrack : source_->subtitle_track();
+        return cc_selected_ ? cc_track_ : source_->subtitle_track();
     }
     void set_subtitle_track(int id) override {
         if (!controller_) return;
-        cc_selected_ = id == VlcSource::kClosedCaptionsTrack;
+        cc_selected_ = id == VlcSource::kClosedCaptionsTrack || id == VlcSource::kClosedCaptions708Track;
+        cc_track_ = id;
         source_->set_closed_captions(cc_selected_);
         if (cc_selected_) {  // libVLC's subtitles off, the captions as the shown track
             source_->set_subtitle_track(-1);
@@ -329,7 +332,9 @@ class HwPlayback final : public Playback {
         }
         const int sub = controller_->subtitle_track();
         if (sub >= 0) {
-            const std::string codec = sub == VlcSource::kClosedCaptionsTrack ? "CEA-608 closed captions" : source_->subtitle_codec(sub);
+            const std::string codec = sub == VlcSource::kClosedCaptionsTrack      ? "CEA-608 closed captions"
+                                      : sub == VlcSource::kClosedCaptions708Track ? "CEA-708 closed captions"
+                                                                                  : source_->subtitle_codec(sub);
             rows.emplace_back("Subtitles", (codec.empty() ? std::string("waiting for libVLC") : codec) + " · drawn by the app · " +
                                                std::to_string(controller_->subtitle_store().count(sub)) + " cues read");
         }
@@ -352,6 +357,7 @@ class HwPlayback final : public Playback {
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
     AudioEffects effects_;  // what this file was opened with
     bool cc_selected_ = false;
+    int cc_track_ = -1;  // which caption track, while cc_selected_
     float lift_ = 0.07f;  // SubRip lines' bottom margin (set_subtitle_lift)  // closed captions shown (from the video, not a libVLC track)
     int area_mode_ = 0;  // AspectMode: Fit
     float area_zoom_ = 1;

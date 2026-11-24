@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/cea608.hpp"
+#include "player/cea708.hpp"
 
 #include <algorithm>
 
@@ -47,7 +48,9 @@ std::vector<uint8_t> rbsp(const uint8_t *p, size_t n) {
 }
 
 // cc_data of one user_data_registered_itu_t_t35 payload; field-1 pairs appended.
-void parse_t35(const uint8_t *p, size_t n, std::vector<CcPair> *out) {
+// cc_data of one user_data_registered_itu_t_t35 payload: 608 field-1 pairs to `out`, 708 (DTVCC)
+// pairs to `out708`; either may be null.
+void parse_t35(const uint8_t *p, size_t n, std::vector<CcPair> *out, std::vector<Cc708Pair> *out708) {
     if (n < 10 || p[0] != 0xB5 || p[1] != 0x00 || p[2] != 0x31 || p[3] != 'G' || p[4] != 'A' || p[5] != '9' ||
         p[6] != '4' || p[7] != 0x03)
         return;
@@ -57,12 +60,13 @@ void parse_t35(const uint8_t *p, size_t n, std::vector<CcPair> *out) {
     for (int c = 0; c < count && k + 3 <= n; ++c, k += 3) {
         const bool valid = (p[k] & 0x04) != 0;
         const int type = p[k] & 0x03;
-        if (valid && type == 0) out->emplace_back(p[k + 1], p[k + 2]);
+        if (valid && type == 0 && out != nullptr) out->emplace_back(p[k + 1], p[k + 2]);
+        if (valid && type >= 2 && out708 != nullptr) out708->push_back({type == 3, p[k + 1], p[k + 2]});
     }
 }
 
 // The SEI messages of a NAL's RBSP (after its header): type 4 payloads to parse_t35.
-void parse_sei(const std::vector<uint8_t> &r, size_t header, std::vector<CcPair> *out) {
+void parse_sei(const std::vector<uint8_t> &r, size_t header, std::vector<CcPair> *out, std::vector<Cc708Pair> *out708) {
     size_t i = header;
     while (i + 2 <= r.size()) {
         if (r[i] == 0x80 && i + 1 == r.size()) break;  // rbsp trailing bits
@@ -74,7 +78,7 @@ void parse_sei(const std::vector<uint8_t> &r, size_t header, std::vector<CcPair>
         if (i >= r.size()) break;
         size += r[i++];
         if (i + static_cast<size_t>(size) > r.size()) break;
-        if (type == 4) parse_t35(r.data() + i, static_cast<size_t>(size), out);
+        if (type == 4) parse_t35(r.data() + i, static_cast<size_t>(size), out, out708);
         i += static_cast<size_t>(size);
     }
 }
@@ -131,7 +135,27 @@ std::vector<CcPair> cc608_pairs(const uint8_t *d, size_t n, bool hevc) {
         if (size < 3) continue;
         const int type = hevc ? (p[0] >> 1) & 0x3F : p[0] & 0x1F;
         if ((!hevc && type != 6) || (hevc && type != 39)) continue;  // SEI (HEVC: prefix SEI)
-        parse_sei(rbsp(p, size), hevc ? 2 : 1, &out);
+        parse_sei(rbsp(p, size), hevc ? 2 : 1, &out, nullptr);
+    }
+    return out;
+}
+
+void cc_pairs(const uint8_t *d, size_t n, bool hevc, std::vector<CcPair> *cc608, std::vector<Cc708Pair> *cc708) {
+    for (const auto &[p, size] : nals(d, n)) {
+        if (size < 3) continue;
+        const int type = hevc ? (p[0] >> 1) & 0x3F : p[0] & 0x1F;
+        if ((!hevc && type != 6) || (hevc && type != 39)) continue;
+        parse_sei(rbsp(p, size), hevc ? 2 : 1, cc608, cc708);
+    }
+}
+
+std::vector<Cc708Pair> cc708_pairs(const uint8_t *d, size_t n, bool hevc) {
+    std::vector<Cc708Pair> out;
+    for (const auto &[p, size] : nals(d, n)) {
+        if (size < 3) continue;
+        const int type = hevc ? (p[0] >> 1) & 0x3F : p[0] & 0x1F;
+        if ((!hevc && type != 6) || (hevc && type != 39)) continue;
+        parse_sei(rbsp(p, size), hevc ? 2 : 1, nullptr, &out);
     }
     return out;
 }
