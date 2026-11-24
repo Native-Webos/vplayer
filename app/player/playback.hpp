@@ -134,6 +134,11 @@ class Playback {
     // Fonts the media carries for its styled subtitles (Matroska attachments).
     virtual std::vector<wnk::media::FontAttachment> subtitle_fonts() const { return {}; }
     virtual std::pair<int, int> video_size() const { return {0, 0}; }
+    // How text subtitles should look (Settings): height as a fraction of the picture, on a box.
+    virtual void set_subtitle_look(float scale, bool box) {
+        (void)scale;
+        (void)box;
+    }
 
     // ---- timing ----
     virtual void set_audio_delay_ms(int64_t) {}

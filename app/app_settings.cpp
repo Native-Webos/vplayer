@@ -5,14 +5,23 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace vplayer {
 
 namespace {
 constexpr const char *kKey = "settings";
 }
 
+float subtitle_scale(int size) {
+    static const float scales[] = {0.045f, 0.055f, 0.07f, 0.085f};
+    return scales[size < 0 ? 0 : size > 3 ? 3 : size];
+}
+
 std::string settings_json(const AppSettings &s) {
-    return nlohmann::json{{"software_only", s.software_only}, {"resume", s.resume}}.dump();
+    return nlohmann::json{{"software_only", s.software_only}, {"resume", s.resume}, {"subtitle_size", s.subtitle_size},
+                          {"subtitle_box", s.subtitle_box}}
+        .dump();
 }
 
 AppSettings settings_from_json(const std::string &text) {
@@ -21,6 +30,9 @@ AppSettings settings_from_json(const std::string &text) {
     if (j.is_discarded() || !j.is_object()) return s;
     if (auto it = j.find("software_only"); it != j.end() && it->is_boolean()) s.software_only = it->get<bool>();
     if (auto it = j.find("resume"); it != j.end() && it->is_boolean()) s.resume = it->get<bool>();
+    if (auto it = j.find("subtitle_size"); it != j.end() && it->is_number_integer())
+        s.subtitle_size = std::clamp(it->get<int>(), 0, 3);
+    if (auto it = j.find("subtitle_box"); it != j.end() && it->is_boolean()) s.subtitle_box = it->get<bool>();
     return s;
 }
 

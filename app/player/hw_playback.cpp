@@ -211,8 +211,12 @@ class HwPlayback final : public Playback {
         const int track = controller_->subtitle_track();
         const std::string header = source_->ass_header(track);
         // SubRip: libass draws its placed lines ({\an8}) with a style like the plain text's.
-        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header();
+        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header(look_scale_, look_box_);
         return header;
+    }
+    void set_subtitle_look(float scale, bool box) override {
+        look_scale_ = scale;
+        look_box_ = box;
     }
     std::pair<int, int> video_size() const override {
         if (!controller_) return {0, 0};
@@ -306,6 +310,8 @@ class HwPlayback final : public Playback {
     std::chrono::steady_clock::time_point next_sync_{};
     int64_t subtitle_delay_us_ = 0;
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
+    float look_scale_ = 0.055f;
+    bool look_box_ = false;
     std::string backend_name_, error_;
     bool paused_ = false;
     bool played_ = false;  // set on the main thread by the state callback

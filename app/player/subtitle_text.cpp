@@ -195,14 +195,18 @@ std::string subrip_plain_text(const std::string &text) {
     return tidy_lines(media::webvtt_plain_text(tidy_lines(no_overrides)));
 }
 
-std::string subrip_ass_header() {
-    // As the plain-text style looks: Inter, white with a black outline, bottom centre, 5.5 % of the
-    // picture's height, 7 % margin.
+std::string subrip_ass_header(float scale, bool box) {
+    // As the plain-text style looks: Inter, white with a black outline (or on a dark box), bottom
+    // centre, `scale` of the picture's height, 7 % margin.
+    const int size = static_cast<int>(1080 * scale + 0.5f);
+    const std::string border = box ? "3,6,0" : "1,3,0";  // BorderStyle, Outline, Shadow
+    const std::string back = box ? "&H59000000" : "&H80000000";
     return "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nScaledBorderAndShadow: yes\n\n"
            "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
            "MarginL, MarginR, MarginV, Encoding\n"
-           "Style: Default,Inter,59,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,96,96,76,1\n\n"
+           "Style: Default,Inter," + std::to_string(size) + ",&H00FFFFFF,&H000000FF," + (box ? back : std::string("&H00000000")) +
+           "," + back + ",-1,0,0,0,100,100,0,0," + border + ",2,96,96,76,1\n\n"
            "[Events]\nFormat: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
 }
 

@@ -3,6 +3,7 @@
 // The pages under the top bar's tabs. Each is a plain View the main screen shows one at a time.
 #pragma once
 
+#include "app_settings.hpp"
 #include "history.hpp"
 #include "ui/theme.hpp"
 #include "vlc_engine.hpp"
@@ -24,6 +25,7 @@ enum class Tab : int { Video = 0, Music, Browse, Network, Playlists, Count };
 struct Services {
     wnk::app::Context *ctx = nullptr;
     PlayHistory *history = nullptr;  // resume points, "Continue watching" (main thread)
+    const AppSettings *settings = nullptr;
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;

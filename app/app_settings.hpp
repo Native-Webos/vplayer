@@ -3,6 +3,7 @@
 // The viewer's settings, kept in the app's key/value store as JSON:
 //   software_only   decode with libVLC only, never the TV's decoder ("Decoder" in Settings)
 //   resume          start files where they stopped ("Continue where I stopped")
+//   subtitle_size, subtitle_box   how text subtitles look (both decoding paths)
 #pragma once
 
 #include "wnk/async/async.hpp"
@@ -15,7 +16,12 @@ namespace vplayer {
 struct AppSettings {
     bool software_only = false;
     bool resume = true;
+    int subtitle_size = 1;      // 0 small, 1 normal, 2 large, 3 huge
+    bool subtitle_box = false;  // on a dark box instead of an outline
 };
+
+// Text height as a fraction of the picture's, for each subtitle_size.
+float subtitle_scale(int size);
 
 std::string settings_json(const AppSettings &s);
 AppSettings settings_from_json(const std::string &json);

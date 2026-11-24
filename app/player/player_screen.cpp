@@ -694,6 +694,13 @@ void PlayerScreen::start(Ui &ui) {
     video_->set_sink(plane ? nullptr : playback_->frames());
     subs_->set_visible(plane);
     subs_->clear_ass_track();
+    if (s_.settings != nullptr) {  // Settings: subtitle size and box
+        const float scale = subtitle_scale(s_.settings->subtitle_size);
+        subs_->set_text_scale(scale);
+        subs_->set_text_style(s_.settings->subtitle_box ? wnk::media::SubtitleView::TextStyle::Box
+                                                       : wnk::media::SubtitleView::TextStyle::Outline);
+        playback_->set_subtitle_look(scale, s_.settings->subtitle_box);
+    }
     subs_track_ = -2;
     subs_size_ = {0, 0};
     set_background(plane ? std::nullopt : std::optional<Color>(render::kBlack));

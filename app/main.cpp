@@ -28,6 +28,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <optional>
@@ -163,6 +164,7 @@ class App : public wnk::app::Delegate {
 
         services_.ctx = &ctx;
         services_.history = &history_;
+        services_.settings = &settings_;
         services_.open_stream = [this, &ctx] {
             main_->go(ctx.ui(), Tab::Network);
             main_->network().open_url_dialog(ctx.ui());
@@ -248,7 +250,13 @@ class App : public wnk::app::Delegate {
         }
         if (engine_) {
             WNK_LOGI(kCat, "engine: software (libVLC) for %s", e.name.c_str());
-            return vplayer::open_vlc_playback(engine_->instance(), e.path, vlc_options_);
+            // Settings → subtitle size and box, as VLC's text renderer options for this file (its
+            // relative size divides the picture height: 12 is the engine's normal).
+            static const int rel[] = {16, 12, 9, 7};
+            auto options = vlc_options_;
+            options.push_back(":freetype-rel-fontsize=" + std::to_string(rel[std::clamp(settings_.subtitle_size, 0, 3)]));
+            if (settings_.subtitle_box) options.push_back(":freetype-background-opacity=160");
+            return vplayer::open_vlc_playback(engine_->instance(), e.path, options);
         }
         if (vlc_info_ && !vlc_info_->available) return vplayer::open_demo_playback();
         return nullptr;
@@ -352,6 +360,15 @@ class App : public wnk::app::Delegate {
         d->body().add<wnk::ui::Toggle>("Continue where I stopped", settings_.resume, [this](Ui &, bool on) {
             settings_.resume = on;
             history_.set_resume(on);
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        const std::vector<std::string> sizes = {"Small", "Normal", "Large", "Huge"};
+        d->body().add<wnk::ui::Choice>("Subtitle size", sizes, settings_.subtitle_size, [this](Ui &, int i) {
+            settings_.subtitle_size = i;
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        d->body().add<wnk::ui::Toggle>("Subtitles on a dark box", settings_.subtitle_box, [this](Ui &, bool on) {
+            settings_.subtitle_box = on;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
         d->add_button("About VPlayer", [this](Ui &u) { show_about(u); });
