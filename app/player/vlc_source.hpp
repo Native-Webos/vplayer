@@ -91,6 +91,14 @@ class VlcSource final : public wnk::media::MediaSource {
     // The codec label of a delivered subtitle stream ("subt", "ssa", "pgs"), empty if not seen yet.
     std::string subtitle_codec(int id) const;
 
+    // Chapters of the current title as libVLC reads them (Matroska, MP4, DVD...), in content time;
+    // empty until the input has started or when the media has none. Main thread.
+    struct ChapterMark {
+        std::string name;
+        int64_t start_ms = 0;
+    };
+    std::vector<ChapterMark> chapters() const;
+
  private:
     struct Stream;
     struct Item {
@@ -128,7 +136,8 @@ class VlcSource final : public wnk::media::MediaSource {
     mutable std::mutex player_mu_;
     libvlc_media_player_t *hold_player() const;  // retained, or nullptr; release when done
     std::vector<std::string> subtitle_files_;    // added files, given to every new player (player_mu_)
-    mutable std::atomic<int> last_subtitle_{-1};  // libVLC's selection while its input was live
+    mutable std::atomic<int> last_subtitle_{-1};
+    mutable std::vector<ChapterMark> chapters_;  // cached once known (player_mu_)  // libVLC's selection while its input was live
     int subtitle_choice_ = -2;                   // the viewer's last choice (-2: none yet) (player_mu_)
     wnk::media::MediaInfo info_;
     wnk::media::BackendCaps caps_;

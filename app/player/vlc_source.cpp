@@ -880,6 +880,34 @@ bool VlcSource::add_subtitle_file(const std::string &path) {
     return ok;
 }
 
+std::vector<VlcSource::ChapterMark> VlcSource::chapters() const {
+    {
+        std::lock_guard<std::mutex> lock(player_mu_);
+        if (!chapters_.empty()) return chapters_;
+    }
+    libvlc_media_player_t *mp = hold_player();
+    if (mp == nullptr) return {};
+    std::vector<ChapterMark> out;
+    libvlc_chapter_description_t **d = nullptr;
+    const int n = libvlc_media_player_get_full_chapter_descriptions(mp, -1, &d);
+    libvlc_media_player_release(mp);
+    int64_t base_ms;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        base_ms = base_us_ / 1000;
+    }
+    for (int i = 0; i < n; ++i) {
+        ChapterMark c;
+        c.name = d[i]->psz_name && *d[i]->psz_name ? d[i]->psz_name : "Chapter " + std::to_string(i + 1);
+        c.start_ms = std::max<int64_t>(0, d[i]->i_time_offset - base_ms);
+        out.push_back(std::move(c));
+    }
+    if (n > 0) libvlc_chapter_descriptions_release(d, static_cast<unsigned>(n));
+    std::lock_guard<std::mutex> lock(player_mu_);
+    if (!out.empty()) chapters_ = out;
+    return out;
+}
+
 std::string VlcSource::ass_header(int id) const {
     std::lock_guard<std::mutex> lock(mu_);
     const auto it = seen_subtitles_.find(id);
@@ -927,6 +955,7 @@ int VlcSource::subtitle_track() const { return -1; }
 void VlcSource::set_subtitle_track(int) {}
 bool VlcSource::add_subtitle_file(const std::string &) { return false; }
 std::string VlcSource::ass_header(int) const { return {}; }
+std::vector<VlcSource::ChapterMark> VlcSource::chapters() const { return {}; }
 std::string VlcSource::subtitle_codec(int) const { return {}; }
 
 #endif
