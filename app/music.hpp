@@ -24,6 +24,14 @@ struct Album {
     std::vector<wnk::platform::FileEntry> tracks;  // natural order
 };
 
+// The artists of `albums` (their folder's parent), natural order, each with its albums' indexes in
+// the albums' order; albums at a drive's root have no artist and are left out.
+struct Artist {
+    std::string name;
+    std::vector<size_t> albums;
+};
+std::vector<Artist> group_artists(const std::vector<Album> &albums);
+
 // What a track's tags say (libVLC reads them; empty fields when it found none).
 struct TrackTags {
     std::string title, artist, album;

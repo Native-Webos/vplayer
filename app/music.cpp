@@ -75,6 +75,22 @@ std::vector<Album> build_albums(const std::vector<wnk::platform::FileEntry> &fil
     return out;
 }
 
+std::vector<Artist> group_artists(const std::vector<Album> &albums) {
+    std::map<std::string, size_t> at;  // the name's index in out
+    std::vector<Artist> out;
+    for (size_t i = 0; i < albums.size(); ++i) {
+        const std::string &name = albums[i].artist;
+        if (name.empty()) continue;
+        auto [it, added] = at.emplace(name, out.size());
+        if (added) out.push_back({name, {}});
+        out[it->second].albums.push_back(i);
+    }
+    std::stable_sort(out.begin(), out.end(), [](const Artist &a, const Artist &b) {
+        return wnk::platform::natural_less(a.name, b.name);
+    });
+    return out;
+}
+
 std::vector<size_t> tag_order(const std::vector<TrackTags> &tags) {
     std::vector<size_t> order(tags.size());
     std::iota(order.begin(), order.end(), size_t{0});

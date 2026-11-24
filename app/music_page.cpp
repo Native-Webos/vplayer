@@ -61,7 +61,7 @@ void MusicPage::on_shown(Ui &ui) {
         count_->set_text("Looking for music…");
         scan();
     }
-    if (album_ < 0) show_albums(ui, 0);
+    if (view_ == Level::Albums && artist_ < 0) show_albums(ui, 0);
 }
 
 void MusicPage::update(Ui &ui, float dt) {
@@ -72,7 +72,7 @@ void MusicPage::update(Ui &ui, float dt) {
     auto vols = media_volumes();
     if (same_volumes(vols, volumes_)) return;
     volumes_ = std::move(vols);
-    if (album_ >= 0) show_albums(ui, 0);
+    show_albums(ui, 0);
     scan();
 }
 
@@ -88,33 +88,66 @@ void MusicPage::scan() {
         [this](std::vector<Album> albums) {
             scanning_ = false;
             albums_ = std::move(albums);
-            WNK_LOGI(kCat, "%zu albums", albums_.size());
-            if (album_ < 0 || album_ >= static_cast<int>(albums_.size())) show_albums(s_.ctx->ui(), 0);
+            artists_ = group_artists(albums_);
+            WNK_LOGI(kCat, "%zu albums, %zu artists", albums_.size(), artists_.size());
+            show_albums(s_.ctx->ui(), 0);  // indexes changed: back to the start
         });
 }
 
-void MusicPage::show_albums(Ui &ui, size_t focus) {
-    album_ = -1;
-    crumbs_->clear_children();
-    auto &c = crumbs_->add<Chip>("Music", ui::Color::hex(0x2A2A31FF), 21, true);
-    c.set_color(col::text);
+void MusicPage::add_crumb(Ui &ui, const std::string &text, bool current) {
+    (void)ui;
+    if (!crumbs_->children().empty()) {
+        auto &chev = crumbs_->add<ImageView>(ui::icon("chevron-right"));
+        chev.set_size(22, 22);
+        chev.set_fit(ImageFit::Contain);
+        chev.set_align(Align::Start, Align::Center);
+    }
+    auto &c = crumbs_->add<Chip>(text, current ? ui::Color::hex(0x2A2A31FF) : col::surface, 21, current);
+    c.set_color(current ? col::text : col::text_soft);
     c.set_align(Align::Start, Align::Center);
+}
+
+void MusicPage::show_albums(Ui &ui, size_t focus, int artist) {
+    view_ = Level::Albums;
+    album_ = -1;
+    artist_ = artist >= 0 && artist < static_cast<int>(artists_.size()) ? artist : -1;
+    crumbs_->clear_children();
+    listed_.clear();
     size_t tracks = 0;
-    for (const auto &a : albums_) tracks += a.tracks.size();
-    if (!scanning_) count_->set_text(std::to_string(albums_.size()) + " albums · " + std::to_string(tracks) + " tracks");
-    const size_t n = albums_.empty() ? 0 : albums_.size() + 1;  // "Shuffle all" first
+    if (artist_ < 0) {
+        add_crumb(ui, "Music", true);
+        for (size_t i = 0; i < albums_.size(); ++i) listed_.push_back(i);
+        lead_ = albums_.empty() ? 0 : artists_.size() > 1 ? 2 : 1;  // Shuffle all, Artists
+    } else {
+        add_crumb(ui, "Music", false);
+        add_crumb(ui, "Artists", false);
+        add_crumb(ui, artists_[static_cast<size_t>(artist_)].name, true);
+        listed_ = artists_[static_cast<size_t>(artist_)].albums;
+        lead_ = 1;  // Play all
+    }
+    for (const size_t i : listed_) tracks += albums_[i].tracks.size();
+    if (!scanning_ || artist_ >= 0)
+        count_->set_text(std::to_string(listed_.size()) + (listed_.size() == 1 ? " album · " : " albums · ") +
+                         std::to_string(tracks) + " tracks");
+    const size_t n = listed_.empty() ? 0 : listed_.size() + lead_;
     grid_->set_items(n, [this](Ui &, size_t i) -> std::unique_ptr<View> {
         TileSpec t;
-        if (i == 0) {
-            t.title = "Shuffle all";
-            t.subtitle = "Every track on your drives";
-            t.icon_url = ui::icon("music");
+        if (i < lead_) {
+            if (i == 0) {
+                t.title = artist_ < 0 ? "Shuffle all" : "Play all";
+                t.subtitle = artist_ < 0 ? "Every track on your drives" : "Every album, in order";
+                t.icon_url = ui::icon("music");
+            } else {
+                t.title = "Artists";
+                t.subtitle = std::to_string(artists_.size()) + " artists";
+                t.icon_url = ui::icon("music");
+            }
             t.tint = ui::Color::hex(0x3A2410FF);
             return std::make_unique<Tile>(t);
         }
-        const Album &a = albums_[i - 1];
+        const Album &a = albums_[listed_[i - lead_]];
         t.title = a.title;
-        t.subtitle = (a.artist.empty() ? std::string() : a.artist + " · ") + std::to_string(a.tracks.size()) +
+        t.subtitle = (a.artist.empty() || artist_ >= 0 ? std::string() : a.artist + " · ") + std::to_string(a.tracks.size()) +
                      (a.tracks.size() == 1 ? " track" : " tracks");
         if (a.cover.empty()) t.icon_url = ui::icon("music"); else t.image_url = file_url(a.cover);
         t.tint = ui::tint_for(a.folder);
@@ -126,21 +159,41 @@ void MusicPage::show_albums(Ui &ui, size_t focus) {
     if (n > 0 && ui.has_focus_within(this)) grid_->focus_index(ui, std::min(focus, n - 1));
 }
 
+void MusicPage::show_artists(Ui &ui, size_t focus) {
+    view_ = Level::Artists;
+    album_ = -1;
+    crumbs_->clear_children();
+    add_crumb(ui, "Music", false);
+    add_crumb(ui, "Artists", true);
+    count_->set_text(std::to_string(artists_.size()) + " artists");
+    grid_->set_items(artists_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
+        const Artist &ar = artists_[i];
+        TileSpec t;
+        t.title = ar.name;
+        t.subtitle = std::to_string(ar.albums.size()) + (ar.albums.size() == 1 ? " album" : " albums");
+        // The first album with a cover stands for the artist.
+        for (const size_t k : ar.albums)
+            if (!albums_[k].cover.empty()) {
+                t.image_url = file_url(albums_[k].cover);
+                break;
+            }
+        if (t.image_url.empty()) t.icon_url = ui::icon("music");
+        t.tint = ui::tint_for(ar.name);
+        return std::make_unique<Tile>(t);
+    });
+    message_->set_visible(false);
+    if (!artists_.empty()) grid_->focus_index(ui, std::min(focus, artists_.size() - 1));
+}
+
 void MusicPage::show_album(Ui &ui, size_t index) {
     if (index >= albums_.size()) return;
+    view_ = Level::Album;
     album_ = static_cast<int>(index);
     const Album &a = albums_[index];
     crumbs_->clear_children();
-    auto &m = crumbs_->add<Chip>("Music", col::surface, 21, false);
-    m.set_color(col::text_soft);
-    m.set_align(Align::Start, Align::Center);
-    auto &chev = crumbs_->add<ImageView>(ui::icon("chevron-right"));
-    chev.set_size(22, 22);
-    chev.set_fit(ImageFit::Contain);
-    chev.set_align(Align::Start, Align::Center);
-    auto &c = crumbs_->add<Chip>(a.artist.empty() ? a.title : a.artist + " · " + a.title, ui::Color::hex(0x2A2A31FF), 21, true);
-    c.set_color(col::text);
-    c.set_align(Align::Start, Align::Center);
+    add_crumb(ui, "Music", false);
+    if (artist_ >= 0) add_crumb(ui, "Artists", false);
+    add_crumb(ui, a.artist.empty() ? a.title : a.artist + " · " + a.title, true);
     count_->set_text(std::to_string(a.tracks.size()) + (a.tracks.size() == 1 ? " track" : " tracks"));
     tags_.assign(a.tracks.size(), TrackTags{});
     order_.resize(a.tracks.size());
@@ -187,16 +240,24 @@ void MusicPage::show_tracks(Ui &) {
 }
 
 void MusicPage::activate(Ui &ui, size_t i) {
-    if (album_ < 0) {
-        if (i == 0) {  // shuffle everything
+    if (view_ == Level::Artists) {
+        if (i < artists_.size()) show_albums(ui, 0, static_cast<int>(i));
+        return;
+    }
+    if (view_ == Level::Albums) {
+        if (i == 0 && lead_ > 0) {  // shuffle everything, or play the artist's albums in order
             std::vector<platform::FileEntry> all;
-            for (const auto &a : albums_) all.insert(all.end(), a.tracks.begin(), a.tracks.end());
+            for (const size_t k : listed_) all.insert(all.end(), albums_[k].tracks.begin(), albums_[k].tracks.end());
             if (all.empty()) return;
-            std::shuffle(all.begin(), all.end(), std::mt19937{std::random_device{}()});
+            if (artist_ < 0) std::shuffle(all.begin(), all.end(), std::mt19937{std::random_device{}()});
             s_.play_queue(std::move(all), 0);
             return;
         }
-        show_album(ui, i - 1);
+        if (i == 1 && lead_ == 2) {
+            show_artists(ui, 0);
+            return;
+        }
+        if (i >= lead_ && i - lead_ < listed_.size()) show_album(ui, listed_[i - lead_]);
         return;
     }
     // The album in the order shown, from the track chosen.
@@ -208,8 +269,17 @@ void MusicPage::activate(Ui &ui, size_t i) {
 }
 
 bool MusicPage::on_action(Ui &ui, const input::ActionEvent &e) {
-    if (e.action != input::Action::Back || album_ < 0) return Page::on_action(ui, e);
-    if (e.phase == input::Phase::Press) show_albums(ui, static_cast<size_t>(album_) + 1);
+    if (e.action != input::Action::Back || (view_ == Level::Albums && artist_ < 0)) return Page::on_action(ui, e);
+    if (e.phase != input::Phase::Press) return true;
+    // Back retraces: album → its list, artist's albums → artists, artists → all albums.
+    if (view_ == Level::Album) {
+        const size_t at = static_cast<size_t>(std::find(listed_.begin(), listed_.end(), static_cast<size_t>(album_)) - listed_.begin());
+        show_albums(ui, at + lead_, artist_);
+    } else if (view_ == Level::Albums) {
+        show_artists(ui, static_cast<size_t>(artist_));
+    } else {
+        show_albums(ui, 1);
+    }
     return true;
 }
 

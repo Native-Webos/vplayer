@@ -58,3 +58,19 @@ TEST("tag_order") {
     CHECK(tag_order({}).empty());
     CHECK(read_tags(nullptr, {"/a.mp3"}).size() == 1);
 }
+
+TEST("group_artists") {
+    std::vector<Album> a(4);
+    a[0].artist = "Zed";
+    a[1].artist = "artist 10";
+    a[2].artist = "";  // a drive's root
+    a[3].artist = "artist 2";
+    std::vector<Album> b = a;
+    b.push_back(a[0]);
+    const auto g = group_artists(b);
+    REQUIRE(g.size() == 3);
+    CHECK_EQ(g[0].name, std::string("artist 2"));
+    CHECK_EQ(g[1].name, std::string("artist 10"));
+    CHECK_EQ(g[2].name, std::string("Zed"));
+    CHECK(g[2].albums == (std::vector<size_t>{0, 4}));
+}

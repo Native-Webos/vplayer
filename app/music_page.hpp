@@ -22,7 +22,10 @@ class MusicPage : public Page {
 
  private:
     void scan();
-    void show_albums(wnk::ui::Ui &ui, size_t focus);
+    // The albums: all of them (artist < 0) or one artist's.
+    void show_albums(wnk::ui::Ui &ui, size_t focus, int artist = -1);
+    void show_artists(wnk::ui::Ui &ui, size_t focus);
+    void add_crumb(wnk::ui::Ui &ui, const std::string &text, bool current);
     void show_album(wnk::ui::Ui &ui, size_t album);
     void show_tracks(wnk::ui::Ui &ui);
     void activate(wnk::ui::Ui &ui, size_t i);
@@ -32,7 +35,13 @@ class MusicPage : public Page {
     std::vector<wnk::platform::RemovableVolume> volumes_;
     std::vector<Album> albums_;
     bool scanned_ = false, scanning_ = false;
-    int album_ = -1;  // the album shown, -1: the albums
+    enum class Level : uint8_t { Albums, Artists, Album };
+    Level view_ = Level::Albums;
+    int album_ = -1;   // the album shown, -1: none
+    int artist_ = -1;  // the artist whose albums show (or whose album), -1: all albums
+    std::vector<Artist> artists_;
+    std::vector<size_t> listed_;  // the album indexes the albums grid shows, after its first tiles
+    size_t lead_ = 0;             // tiles before the albums (Shuffle all, Artists / Play all)
     std::vector<TrackTags> tags_;   // of the album shown, once read
     std::vector<size_t> order_;     // its tracks in tag order
     float poll_ = 0;
