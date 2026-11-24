@@ -113,9 +113,13 @@ release and date.
       size and background (Settings); search. Host-tested
 - [x] Subtitle colour, audio to the TV (decoded PCM option), audio delay on the hardware path,
       snapshots (software path), your own playlists, video thumbnails. Host-tested
+- [x] Audio effects on both paths (equalizer presets, volume boost, normalise, wider stereo; the TV
+      decoder path runs them in VLC's transcode and reopens the file). Host-tested
+- [x] Closed captions (CEA-608 CC1 from H.264/HEVC SEI) on the TV decoder path. Host-tested
+- [ ] CEA-708 captions
 - [ ] Teletext pages (not subtitles) as a viewer
 - [ ] DVD/Blu-ray ISO and folders with menus (software path)
-- [ ] Video: aspect, crop, zoom, deinterlace, adjust; audio: equalizer, normalize, stereo mode
+- [ ] Video on the TV decoder path: deinterlace, adjust (the TV decodes: VLC never sees the picture)
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)
 - [ ] Sleep timer, repeat/shuffle, bookmarks, snapshot
 

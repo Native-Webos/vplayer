@@ -117,6 +117,11 @@ how to test it, what should happen, and what the log shows.
 | 7b.12 | Playback → Add to a playlist → New playlist; Playlists tab | The list with the file; plays; Red removes an entry / the list |
 | 7b.13 | Browse a folder of videos, Home "Recently added" | Thumbnails appear one by one (log `[thumbs] … in N ms`); none made while a video plays |
 | 7b.14 | A DVB recording with teletext subtitles (e.g. page 888) on the TV decoder | Subtitles show and clear, with the language's accented letters |
+| 7b.15 | Audio: Equalizer "Rock", on the TV decoder path | A toast, the file reopens at the same spot (1-2 s), the sound changes; the panel says the TV gets PCM |
+| 7b.16 | Audio: Volume boost 200 %, Normalise loudness, Wider stereo (TV decoder, then software path) | Each audible; software path: equalizer and volume change without a reopen |
+| 7b.17 | Audio effects back to Off / 100 % on a TrueHD or Atmos file | Passthrough (or the TV's decoding) again after the reopen |
+| 7b.18 | A US broadcast recording (ATSC .ts, or an H.264 file with A/53 captions) | Subtitles list "Closed captions (CC1)"; chosen: pop-on lines appear in sync and clear; roll-up lines scroll |
+| 7b.19 | Captions on, then seek | No stale lines after the seek; captions resume within a few seconds |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
 
@@ -142,8 +147,7 @@ how to test it, what should happen, and what the log shows.
 
 ## Not built yet
 
-- Video thumbnails (libVLC 3 has no thumbnailer; would need a hidden player per file).
-- Teletext subtitles on the TV decoder path (zvbi pages), closed captions (CEA-608/708).
+- Teletext pages as a viewer (subtitle pages only); CEA-708 captions (608 only: CC1).
 - SMB1 shares and NetBIOS discovery (libdsm does not build against glibc 2.12).
 - Reading Dolby Vision configuration records and attached fonts from network files (local files
   only; the Dolby Vision RPU scan works for network files).
