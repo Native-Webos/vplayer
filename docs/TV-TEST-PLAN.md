@@ -52,10 +52,16 @@ Then the rest of the sections as time allows.
 | Shutdown during thumbnails and tag reading | Pass (0.6 s and 0.2 s) |
 | 3.1 discovery | Runs, 0 servers here; `socket bind error` from SAP at start (harmless) |
 | 7b.15–7b.17 audio effects | Mechanics pass (gain in the transcode chain, reopen in ~0.2 s); **by ear: not yet** |
-| 3.3–3.6 SMB, 7b.12 playlist, 7b.19 caption seek | Not yet (need a NAS, typing, more time) |
+| 8.1, 8.2 software path (full range, the phone recording, 1080p H.264) | Pass after a fix: VLC 3's vmem made VLC scale every picture (patch 0005); now 0 pictures lost (was ~60 %) |
+| 3.9 HLS over HTTPS | Pass after fixes: GnuTLS trusted no certificate (now the TV's /etc/ssl/certs), and the TV decoder path refused HLS's stream numbering; plays 320×184 → 1080p60, 0 dropped |
+| 4.2–4.4 playlists and IPTV | Pass after a fix: a list opened right after entering the tab was cancelled by the drive scan; iptv-org's 12 125-channel index shows in 0.4 s with logos; a channel plays on the TV decoder |
+| 7b.19 captions across a seek | Pass (no stale line after the seek) |
+| Audio and subtitle languages (new) | Pass (French audio track chosen; subtitles always on) |
+| Effects debounce, Continue watching thumbnails | Pass |
+| 3.3–3.6 SMB, 7b.12 playlist | Not yet (need a NAS, typing) |
 
-Follow-ups found: effect changes reopen once per step (debounce them); "Continue watching" tiles have
-no thumbnails.
+Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on
+Continue watching) are done.
 
 ## 1. Install and start (new permissions)
 
