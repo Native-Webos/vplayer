@@ -7,10 +7,12 @@
 // The main screen is a top bar (logo, tabs, search, settings) over one page per tab. libVLC starts
 // on a worker while the UI comes up; Settings shows what it reported.
 #include "library.hpp"
+#include "network_page.hpp"
 #include "pages.hpp"
 #include "player/hw_playback.hpp"
 #include "player/player_screen.hpp"
 #include "ui/theme.hpp"
+#include "vlc_dialogs.hpp"
 #include "vlc_engine.hpp"
 
 #include "wnk/app/app.hpp"
@@ -88,13 +90,14 @@ class MainScreen : public Screen {
             "Albums, artists and songs from your drives and network shares, with VLC's audio formats.");
         browse_ = &stack.add<vplayer::BrowsePage>(s_);
         pages_[static_cast<size_t>(Tab::Browse)] = browse_;
-        pages_[static_cast<size_t>(Tab::Network)] = &stack.add<vplayer::PlaceholderPage>(
-            vui::icon("server"), "Network shares are coming",
-            "SMB, NFS, SFTP and FTP shares and DLNA media servers on your network, found automatically.");
+        network_ = &stack.add<vplayer::NetworkPage>(s_, nullptr);
+        pages_[static_cast<size_t>(Tab::Network)] = network_;
         pages_[static_cast<size_t>(Tab::Playlists)] = &stack.add<vplayer::PlaceholderPage>(
             vui::icon("playlist"), "Playlists are coming", "M3U, XSPF and PLS playlists and IPTV channel lists.");
         for (size_t i = 0; i < pages_.size(); ++i) pages_[i]->set_visible(i == 0);
     }
+
+    vplayer::NetworkPage &network() { return *network_; }
 
     // Shows a tab's page (and selects the tab) without moving focus.
     void show(Ui &ui, Tab tab) {
@@ -145,6 +148,7 @@ class MainScreen : public Screen {
     vui::PillTabs *tabs_ = nullptr;
     std::array<vplayer::Page *, static_cast<size_t>(Tab::Count)> pages_{};
     vplayer::BrowsePage *browse_ = nullptr;
+    vplayer::NetworkPage *network_ = nullptr;
     Tab current_ = Tab::Video;
 };
 
@@ -158,6 +162,9 @@ class App : public wnk::app::Delegate {
         services_.show_tab = [this, &ctx](Tab t) { main_->go(ctx.ui(), t); };
         services_.browse_to = [this, &ctx](const std::string &folder) { main_->browse_to(ctx.ui(), folder); };
         services_.play = [this, &ctx](const wnk::platform::FileEntry &e) { play(ctx.ui(), e); };
+        services_.play_queue = [this, &ctx](std::vector<wnk::platform::FileEntry> queue, size_t index) {
+            open_player(ctx.ui(), std::move(queue), index);
+        };
 
         nav_ = &ui.root().add<Navigator>();
         auto main = std::make_unique<MainScreen>(services_, [this](Ui &u) { show_about(u); });
@@ -186,6 +193,12 @@ class App : public wnk::app::Delegate {
                 vlc_info_ = std::move(r.info);
                 hw_ = r.hw;
                 hw_available_ = r.hw_available;
+                if (engine_) {
+                    // libVLC's sign-in and certificate questions, and the network page's discovery.
+                    dialogs_ = std::make_unique<vplayer::VlcDialogs>(engine_->instance(), ctx.dispatcher(),
+                                                                     [&ctx]() -> Ui & { return ctx.ui(); });
+                    main_->network().set_vlc(engine_->instance());
+                }
                 WNK_LOGI(kCat, "hardware decoding: %s%s (Dolby Vision %s, Atmos %s)", r.hw_available ? "yes" : "no",
                          r.hw_available ? "" : (", " + r.hw_why).c_str(), r.hw.dolby_vision ? "yes" : "no",
                          r.hw.atmos ? "yes" : "no");
@@ -251,6 +264,15 @@ class App : public wnk::app::Delegate {
         if (queue.empty() || queue[index].path != e.path) {
             queue.assign(1, e);
             index = 0;
+        }
+        open_player(ui, std::move(queue), index);
+    }
+
+    void open_player(Ui &ui, std::vector<wnk::platform::FileEntry> queue, size_t index) {
+        if (queue.empty()) return;
+        if (!engine_ && !vlc_info_) {
+            ui.toast("The player is still starting. Try again in a moment.");
+            return;
         }
         // A player already open (a relaunch with "play", or a file opened from elsewhere) is replaced.
         if (auto *open_player = dynamic_cast<vplayer::PlayerScreen *>(nav_->top())) open_player->close(ui);
@@ -326,6 +348,7 @@ class App : public wnk::app::Delegate {
     Navigator *nav_ = nullptr;
     MainScreen *main_ = nullptr;
     std::shared_ptr<vplayer::VlcEngine> engine_;
+    std::unique_ptr<vplayer::VlcDialogs> dialogs_;
     std::optional<vplayer::VlcInfo> vlc_info_;
     std::optional<wnk::platform::FileEntry> pending_play_;
     std::vector<std::string> vlc_options_;
@@ -344,6 +367,7 @@ int main(int argc, char **argv) {
     config.title = "VPlayer";
     config.script_env_prefix = "APP_VPLAYER";  // APP_VPLAYER_KEYS=Return,Escape drives the host smoke test
     config.theme = vplayer::ui::make_theme();
+    config.storage = true;  // saved servers and addresses, resume points (DB8 on the TV)
     config.font_regular = "fonts/Inter-Regular.ttf";
     config.font_bold = "fonts/Inter-SemiBold.ttf";
     return wnk::app::run(argc, argv, config, [] { return std::make_unique<App>(); });

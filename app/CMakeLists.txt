@@ -17,7 +17,7 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp vlc_dialogs.cpp
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp)
@@ -66,6 +66,7 @@ wnk_add_webos_package(
         LARGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/largeIcon.png"
         ICON_COLOR "#e85d04"
         EXPECTED_NEEDED "${CMAKE_CURRENT_SOURCE_DIR}/expected-needed.txt"
+        REQUIRED_PERMISSIONS database.operation
         EXTRA_DIRS "${VPLAYER_FONT_DIR}" "${VPLAYER_ICON_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
 
 # Host: the player opens (demo engine), shows its first frame and closes with Back.

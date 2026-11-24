@@ -25,6 +25,9 @@ struct Services {
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;
+    // Opens the player on queue[index], with the queue for previous/next (network folders: the
+    // entries' paths are libVLC addresses).
+    std::function<void(std::vector<wnk::platform::FileEntry> queue, size_t index)> play_queue;
 };
 
 class Page : public wnk::ui::View {
