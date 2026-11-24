@@ -255,6 +255,11 @@ class HwPlayback final : public Playback {
             rows.emplace_back("Subtitles", (codec.empty() ? std::string("waiting for libVLC") : codec) + " · drawn by the app · " +
                                                std::to_string(controller_->subtitle_store().count(sub)) + " cues read");
         }
+        const std::string dv = source_->dovi_text();
+        if (!dv.empty()) {
+            const bool declared = s.format.video && s.format.video->dolby_vision_profile >= 0;
+            rows.emplace_back("Dolby Vision", dv + (declared ? "" : " · not declared to the TV"));
+        }
         rows.emplace_back("Decoding", std::string("TV decoder (") + controller_->backend_name() + ")");
         rows.emplace_back("Packets fed", std::to_string(s.video_packets) + " video · " + std::to_string(s.audio_packets) + " audio");
         rows.emplace_back("Rebuffers", std::to_string(s.rebuffers));
