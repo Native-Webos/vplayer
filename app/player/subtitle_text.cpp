@@ -195,6 +195,56 @@ std::string subrip_plain_text(const std::string &text) {
     return tidy_lines(media::webvtt_plain_text(tidy_lines(no_overrides)));
 }
 
+std::string subrip_ass_header() {
+    // As the plain-text style looks: Inter, white with a black outline, bottom centre, 5.5 % of the
+    // picture's height, 7 % margin.
+    return "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nScaledBorderAndShadow: yes\n\n"
+           "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+           "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+           "MarginL, MarginR, MarginV, Encoding\n"
+           "Style: Default,Inter,59,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,0,2,96,96,76,1\n\n"
+           "[Events]\nFormat: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+}
+
+std::string subrip_ass_event(const std::string &text) {
+    if (text.find("{\\") == std::string::npos) return {};  // nothing libass would place differently
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        if (c == '\r') continue;
+        if (c == '\n') {
+            out += "\\N";
+            continue;
+        }
+        if (c == '<') {
+            const size_t close = text.find('>', i);
+            if (close == std::string::npos) {
+                out += c;
+                continue;
+            }
+            std::string tag = text.substr(i + 1, close - i - 1);
+            for (auto &ch : tag) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (tag == "i" || tag == "b" || tag == "u" || tag == "s") out += "{\\" + tag + "1}";
+            else if (tag == "/i" || tag == "/b" || tag == "/u" || tag == "/s") out += "{\\" + tag.substr(1) + "0}";
+            else if (tag.rfind("font", 0) == 0) {
+                const size_t hash = tag.find('#');
+                if (hash != std::string::npos && hash + 7 <= tag.size()) {
+                    std::string rgb = tag.substr(hash + 1, 6);
+                    for (auto &ch : rgb) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                    out += "{\\c&H" + rgb.substr(4, 2) + rgb.substr(2, 2) + rgb.substr(0, 2) + "&}";  // BGR
+                }
+            } else if (tag == "/font") {
+                out += "{\\c}";
+            }
+            i = close;
+            continue;
+        }
+        out += c;
+    }
+    while (!out.empty() && (out.back() == ' ' || out.back() == '\n')) out.pop_back();
+    return "0,0,Default,,0,0,0,," + out;
+}
+
 std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const uint8_t *data, size_t size,
                                                             const char *encoding, int track, int64_t start_us,
                                                             int64_t length_us) {
@@ -208,7 +258,11 @@ std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const ui
     const std::string raw(reinterpret_cast<const char *>(data), size);
 
     if (f == kSubt) {
-        cue->text = subrip_plain_text(subtitle_utf8(raw, encoding));
+        const std::string text = subtitle_utf8(raw, encoding);
+        cue->text = subrip_plain_text(text);
+        // Placed or styled lines ({\an8}...) are drawn by libass with subrip_ass_header().
+        const std::string event = subrip_ass_event(text);
+        if (!event.empty()) cue->ass_events.push_back(event);
     } else if (f == kSsa) {
         const std::string event = subtitle_utf8(raw, encoding);
         cue->text = tidy_lines(media::ass_event_text(event));

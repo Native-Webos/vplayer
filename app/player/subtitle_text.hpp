@@ -36,6 +36,12 @@ std::shared_ptr<const wnk::media::SubtitleCue> text_subtitle_cue(uint32_t vlc_fo
                                                                  const char *encoding, int track, int64_t start_us,
                                                                  int64_t length_us);
 
+// SubRip lines with ASS override tags ({\an8} to place them at the top, colours...) are also given as
+// an ASS event, drawn by libass with this script header (styled as the plain text is); lines
+// without tags stay plain text. Empty when the line has no override tag.
+std::string subrip_ass_header();
+std::string subrip_ass_event(const std::string &utf8_text);
+
 // Helpers, exposed for tests.
 std::string subtitle_utf8(const std::string &text, const char *encoding);  // valid UTF-8 out
 std::string subrip_plain_text(const std::string &text);                    // tags and {\...} removed

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/hw_playback.hpp"
 
+#include "player/subtitle_text.hpp"
 #include "player/vlc_source.hpp"
 
 #include "wnk/log.hpp"
@@ -206,7 +207,12 @@ class HwPlayback final : public Playback {
         return controller_ ? source_->fonts() : std::vector<media::FontAttachment>{};
     }
     std::string subtitle_ass_header() const override {
-        return controller_ ? source_->ass_header(controller_->subtitle_track()) : std::string();
+        if (!controller_) return {};
+        const int track = controller_->subtitle_track();
+        const std::string header = source_->ass_header(track);
+        // SubRip: libass draws its placed lines ({\an8}) with a style like the plain text's.
+        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header();
+        return header;
     }
     std::pair<int, int> video_size() const override {
         if (!controller_) return {0, 0};

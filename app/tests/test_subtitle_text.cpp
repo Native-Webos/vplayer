@@ -55,7 +55,17 @@ TEST("subrip_tags_and_timing") {
     CHECK_EQ(c->track, 3);
     CHECK_EQ(c->start_us, int64_t{10'000'000});
     CHECK_EQ(c->end_us, int64_t{12'000'000});
-    CHECK(c->ass_events.empty());
+    CHECK_EQ(c->ass_events.size(), size_t{1});  // {\\an8}: also given to libass
+}
+
+TEST("subrip_placement_to_ass") {
+    auto c = cue("subt", "{\\an8}<i>Top</i> and <font color=\"#FF8000\">orange</font>\nline");
+    REQUIRE(c != nullptr);
+    CHECK_EQ(c->text, std::string("Top and orange\nline"));
+    REQUIRE(c->ass_events.size() == 1);
+    CHECK_EQ(c->ass_events[0], std::string("0,0,Default,,0,0,0,,{\\an8}{\\i1}Top{\\i0} and {\\c&H0080FF&}orange{\\c}\\Nline"));
+    CHECK(cue("subt", "<i>no tags</i>")->ass_events.empty());
+    CHECK(subrip_ass_header().find("Style: Default,Inter") != std::string::npos);
 }
 
 TEST("subrip_open_end_and_nul") {
