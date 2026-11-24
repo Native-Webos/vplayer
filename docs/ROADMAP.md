@@ -39,7 +39,7 @@ release and date.
 - [x] Player screen (mockup 3): title pill, format chip, floating bar with seek bar, ±10 s, play/pause;
       auto-hide after 4 s; hidden: Left/Right skip, OK pauses; media keys; Back/Stop close (stop on a
       worker); screensaver blocked while playing. Launch param `{"play": "<path>"}`
-- [ ] Remote-key paths verified on the TV (pause, seek, hide/show): host-verified only so far
+- [x] Remote-key paths verified on the TV (pause, seek, panels) with `app/tools/tv-keys.sh`
 - [x] Subtitles on the TV: a sidecar `.srt` is found and drawn by VLC in Inter (`--freetype-font`
       set to the app's font; VLC's default font file does not exist on webOS)
 - [ ] **Software path drops frames in the app** (see RESEARCH.md §10): even MPEG-4 ASP 720p, which
@@ -67,16 +67,18 @@ release and date.
         and plays 311 ms after Seek, 0 dropped
       - audio-only MKV (TrueHD → PCM): NDL
       - MPEG-4 ASP AVI: refused by the TV decoder → software path on its own
-- [ ] Pause/resume and remote seeking on the TV (host-verified; `"at"` launch seek verified)
+- [x] Pause/resume, ±10 s skips, audio-track switch and colour keys with remote keys on the TV
+      (RESEARCH.md §13); skips land on the keyframe before the target
 - [x] Text subtitles on the hardware path (RESEARCH.md §12): SubRip, ASS/SSA (styled by libass), MP4
       timed text and WebVTT from VLC's subtitle streams, files beside the media, the panel's track
       choice and delay; within a frame of the picture. On the TV 2026-11-24
 - [ ] Bitmap subtitles on the hardware path (PGS, DVD, DVB): decode in the module or the app
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
-- [ ] Chapters, speed and audio-track switch on the hardware path verified on the TV
+- [ ] Speed on the hardware path: time-stretched audio from VLC (tempo filter in `#transcode`)
+- [ ] Chapters on the hardware path
 - [ ] Dolby Vision (profile 5/8) declared to Starfish: VLC 3 does not report it; detect from the codec
       setup or RPU NALs
-- [ ] Seek precision: fast seek lands on the keyframe before the target (can be many seconds early)
+- [x] Seek precision: lands on the keyframe at or before the target (was up to 9 s early)
 - [ ] Settings → Decoder: Automatic / Hardware / Software (today: the `"decoder"` launch parameter)
 
 ## P3: VLC's sources

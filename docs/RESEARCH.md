@@ -218,3 +218,28 @@ What it took to cross-build VLC 3.0.24 with the webosbrew NDK. Each one is now h
   them in the module (its SPU decoders produce subpicture regions), or the app decodes them itself.
 - The rooted TV accepts input events written to `/dev/input/event1` (the IR remote): `app/tools/tv-keys.sh`
   presses remote keys, which the app cannot tell from the real remote (Back is code 412).
+
+## 13. Remote test pass on the hardware path (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
+
+Driven with `app/tools/tv-keys.sh` (real remote events), on H.264 + AAC/AC-3 MKVs and 4K HEVC + TrueHD.
+
+- Pause and resume: correct.
+- Skips were broken: every ±10 s skip landed where the picture already was. Three causes, all fixed:
+  1. VLC 3 converts the timestamps it gives a stream output to its playback clock (`DecoderPlaySout`
+     → `DecoderFixTs`). That clock restarts at each seek, so after one, timestamps followed the wall
+     clock instead of the media. Before any seek the app's rebasing (meant for MPEG-TS) hid it.
+     Patch 0004 adds `--sout-stream-time` (no conversion; sending never waited on the clock anyway).
+  2. Packets read before a seek are still on their way when it starts. VLC flushes each stream when
+     its input seeks, on the stream's own thread after the old packets, so the source drops
+     everything before that flush. VLC 3's `#transcode` did not pass flushes on: patch 0003.
+  3. Matroska fast seek starts at an index point up to ~9 s before the target. The source keeps the
+     newest video keyframe at or before the target with what follows, and hands it over once a packet
+     reaches the target. Skips now land on the keyframe before the target (within 2 s on a 2 s GOP);
+     the picture is back 80–260 ms after the key (1080p), ~600 ms for 4K HEVC.
+- Audio track switch: the wrong track was taken. VLC 3 streams every ES by default (`sout-all` is on),
+  so the source took whichever audio stream came first. It now accepts only the ids it selected,
+  and `:no-sout-all` stops VLC reading (and transcoding) the others. AAC → AC-3 5.1 switch verified.
+- Speed: the kit's controller needs the source to time-stretch audio, which VlcSource does not, so
+  the TV decoder path plays at 1× only; the panel and bar say so. A tempo filter in the `#transcode`
+  chain would lift this.
+- Colour keys (red Info, green Playback, yellow Subtitles, blue Audio) open their panel tabs.
