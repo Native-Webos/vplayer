@@ -12,6 +12,7 @@
 #include "network_page.hpp"
 #include "playlists_page.hpp"
 #include "search.hpp"
+#include "thumbnails.hpp"
 #include "pages.hpp"
 #include "player/hw_playback.hpp"
 #include "player/player_screen.hpp"
@@ -31,6 +32,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
+#include <cstdio>
+#include <sys/stat.h>
 #include <memory>
 #include <optional>
 #include <string>
@@ -234,6 +238,9 @@ class App : public wnk::app::Delegate {
                     dialogs_ = std::make_unique<vplayer::VlcDialogs>(engine_->instance(), ctx.dispatcher(),
                                                                      [&ctx]() -> Ui & { return ctx.ui(); });
                     main_->network().set_vlc(engine_->instance());
+                    thumbnails_ = std::make_unique<vplayer::Thumbnails>(engine_->instance(), thumbnail_dir(ctx),
+                                                                        ctx.dispatcher());
+                    services_.thumbnails = thumbnails_.get();
                 }
                 WNK_LOGI(kCat, "hardware decoding: %s%s (Dolby Vision %s, Atmos %s)", r.hw_available ? "yes" : "no",
                          r.hw_available ? "" : (", " + r.hw_why).c_str(), r.hw.dolby_vision ? "yes" : "no",
@@ -253,6 +260,9 @@ class App : public wnk::app::Delegate {
 
     void on_stop(wnk::app::Context &) override {
         cancel_.cancel();
+        services_.thumbnails = nullptr;
+        thumbnails_.reset();  // its thread uses libVLC: before the engine
+        dialogs_.reset();
         engine_.reset();
     }
 
@@ -379,6 +389,33 @@ class App : public wnk::app::Delegate {
         }
     }
 
+    // Where thumbnails are kept: beside the app where the TV lets it write (as the kit's HTTP cache),
+    // else until reboot under /tmp; ~/.cache on a desktop.
+    static std::string thumbnail_dir(wnk::app::Context &ctx) {
+        std::vector<std::string> dirs;
+        if constexpr (wnk::platform::kIsWebOS) {
+            dirs.push_back(ctx.launch().app_dir + "/.wnk-state/thumbs");
+            dirs.push_back("/tmp/" + ctx.launch().app_id + "/thumbs");
+        } else {
+            const char *xdg = std::getenv("XDG_CACHE_HOME");
+            const char *home = std::getenv("HOME");
+            const std::string base = xdg && xdg[0] == '/' ? xdg : home ? std::string(home) + "/.cache" : "/tmp";
+            dirs.push_back(base + "/" + ctx.launch().app_id + "/thumbs");
+        }
+        for (const auto &d : dirs) {
+            std::string p;
+            for (size_t i = 1; i != std::string::npos; i = d.find('/', i + 1)) ::mkdir(d.substr(0, i).c_str(), 0755);
+            ::mkdir(d.c_str(), 0755);
+            const std::string probe = d + "/.probe";
+            if (std::FILE *f = std::fopen(probe.c_str(), "w")) {
+                std::fclose(f);
+                std::remove(probe.c_str());
+                return d;
+            }
+        }
+        return {};
+    }
+
     void show_settings(Ui &ui) {
         auto d = std::make_unique<Dialog>("Settings");
         const std::vector<std::string> decoders = {"Automatic (the TV's decoder when it can)", "Software (VLC) only"};
@@ -440,6 +477,7 @@ class App : public wnk::app::Delegate {
     MainScreen *main_ = nullptr;
     std::shared_ptr<vplayer::VlcEngine> engine_;
     std::unique_ptr<vplayer::VlcDialogs> dialogs_;
+    std::unique_ptr<vplayer::Thumbnails> thumbnails_;
     vplayer::PlayHistory history_;
     vplayer::AppSettings settings_;
     std::vector<vplayer::MyPlaylist> my_playlists_;

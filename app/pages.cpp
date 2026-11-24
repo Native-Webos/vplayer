@@ -2,6 +2,7 @@
 #include "pages.hpp"
 
 #include "library.hpp"
+#include "thumbnails.hpp"
 
 #include "wnk/log.hpp"
 
@@ -58,7 +59,7 @@ bool is_disc_image(const platform::FileEntry &e) {
     return e.kind == platform::FileKind::Other && (ext == "ISO" || ext == "IMG");
 }
 
-TileSpec entry_tile(const platform::FileEntry &e) {
+TileSpec entry_tile(const platform::FileEntry &e, Thumbnails *thumbs = nullptr) {
     TileSpec t;
     if (is_disc_image(e)) {
         t.title = display_name(e.name);
@@ -76,6 +77,7 @@ TileSpec entry_tile(const platform::FileEntry &e) {
             t.subtitle = "Folder";
             break;
         case platform::FileKind::Video:
+            if (thumbs != nullptr) t.image_url = thumbs->get(e);
             t.icon_url = ui::icon("film");
             t.tint = ui::tint_for(e.name);
             t.badge = extension_upper(e.name);
@@ -190,6 +192,15 @@ HomePage::HomePage(Services &services) : s_(services) {
 
 void HomePage::update(Ui &ui, float dt) {
     Page::update(ui, dt);
+    if (s_.thumbnails != nullptr && s_.thumbnails->generation() != thumbs_gen_) {  // new thumbnails
+        thumbs_gen_ = s_.thumbnails->generation();
+        if (rail_mode_ == 1 && !recent_.empty()) {
+            const bool had = ui.has_focus_within(rail_);
+            const size_t at = rail_->focused_index();
+            show_rail(ui);
+            if (had) rail_->focus_index(ui, at);
+        }
+    }
     // Resume points changed (a file was played): the "Continue watching" list follows.
     if (s_.history != nullptr && s_.history->loaded() && s_.history->generation() != history_gen_) {
         history_gen_ = s_.history->generation();
@@ -267,7 +278,7 @@ void HomePage::show_rail(Ui &) {
     }
     rail_->set_items(recent_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
         const auto &e = recent_[i];
-        TileSpec t = entry_tile(e);
+        TileSpec t = entry_tile(e, s_.thumbnails);
         t.subtitle = base_name(parent_of(e.path)) + " · " + format_bytes(e.size);
         return std::make_unique<Tile>(t);
     });
@@ -319,6 +330,17 @@ void BrowsePage::on_shown(Ui &ui) {
 
 void BrowsePage::update(Ui &ui, float dt) {
     Page::update(ui, dt);
+    if (s_.thumbnails != nullptr && s_.thumbnails->generation() != thumbs_gen_) {  // new thumbnails
+        thumbs_gen_ = s_.thumbnails->generation();
+        if (!folder_.empty() && !entries_.empty()) {
+            const bool had = ui.has_focus_within(grid_);
+            const size_t at = grid_->focused_index();
+            grid_->set_items(entries_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
+                return std::make_unique<Tile>(entry_tile(entries_[i], s_.thumbnails));
+            });
+            if (had) grid_->focus_index(ui, at);
+        }
+    }
     poll_ += dt;
     if (poll_ < kPollSeconds) return;
     poll_ = 0;
@@ -428,7 +450,7 @@ void BrowsePage::show_entries(Ui &ui, std::vector<platform::FileEntry> entries, 
     const size_t n = entries_.size();
     count_->set_text(n == 1 ? "1 item" : std::to_string(n) + " items");
     grid_->set_items(n, [this](Ui &, size_t i) -> std::unique_ptr<View> {
-        return std::make_unique<Tile>(entry_tile(entries_[i]));
+        return std::make_unique<Tile>(entry_tile(entries_[i], s_.thumbnails));
     });
     if (!error.empty()) {
         message_->set_text("This folder cannot be read.\n" + error);

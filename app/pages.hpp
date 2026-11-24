@@ -30,6 +30,7 @@ struct Services {
     // The viewer's own playlists (playlist.hpp), and saving them after a change (main thread).
     std::vector<MyPlaylist> *my_playlists = nullptr;
     std::function<void()> save_my_playlists;
+    class Thumbnails *thumbnails = nullptr;  // video thumbnails, once libVLC runs (thumbnails.hpp)
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;
@@ -65,6 +66,7 @@ class HomePage : public Page {
     int rail_mode_ = 1;           // 0 continue watching, 1 recently added
     bool continue_shown_ = false;  // switched to "Continue watching" once it had entries
     bool recent_loaded_ = false;
+    uint64_t thumbs_gen_ = 0;
     float poll_ = 0;
     bool first_ = true;
     ui::PillTabs *rail_tabs_ = nullptr;
@@ -102,6 +104,7 @@ class BrowsePage : public Page {
     float poll_ = 0;
     bool started_ = false;
     bool want_focus_ = false;  // move focus into the grid when the listing arrives (browse_to)
+    uint64_t thumbs_gen_ = 0;
     wnk::ui::Row *crumbs_ = nullptr;
     wnk::ui::Label *count_ = nullptr;
     wnk::ui::Label *message_ = nullptr;

@@ -2,6 +2,7 @@
 #include "player/player_screen.hpp"
 
 #include "music.hpp"
+#include "thumbnails.hpp"
 
 #include "library.hpp"
 #include "ui/theme.hpp"
@@ -781,6 +782,7 @@ PlayerScreen::~PlayerScreen() = default;
 
 void PlayerScreen::on_show(Ui &ui) {
     Screen::on_show(ui);
+    if (s_.thumbnails != nullptr) s_.thumbnails->set_paused(true);  // never competes with playback
     wake_ = s_.ctx->keep_screen_on("video playback");
     start(ui);
     ui.focus(play_);
@@ -788,6 +790,7 @@ void PlayerScreen::on_show(Ui &ui) {
 
 void PlayerScreen::on_hide(Ui &ui) {
     Screen::on_hide(ui);
+    if (s_.thumbnails != nullptr) s_.thumbnails->set_paused(false);
     ui.set_clear_color(std::nullopt);
 }
 
