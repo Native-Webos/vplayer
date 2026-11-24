@@ -281,7 +281,7 @@ void PlaylistsPage::show_entries(Ui &ui, const std::string &group) {
         TileSpec t;
         t.title = it.title;
         const platform::FileKind k = platform::file_kind(it.location);
-        t.icon_url = !it.logo.empty() ? it.logo : ui::icon(k == platform::FileKind::Audio ? "music" : "film");
+        if (!it.logo.empty()) t.logo_url = it.logo; else t.icon_url = ui::icon(k == platform::FileKind::Audio ? "music" : "film");
         t.tint = ui::tint_for(it.title);
         const std::string d = duration_text(it.duration_ms);
         t.subtitle = it.location.find("://") != std::string::npos ? mrl_protocol(it.location) : "File";

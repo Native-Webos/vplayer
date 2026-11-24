@@ -195,7 +195,12 @@ Tile::Tile(const TileSpec &spec) : Column(12), title_(spec.title), subtitle_(spe
         chips->set_padding(Insets::all(12));
     } else {
         thumb.set_padding(Insets::all(12));
-        if (!spec.icon_url.empty()) {
+        if (!spec.logo_url.empty()) {
+            auto &img = thumb.add<ImageView>(spec.logo_url);
+            img.set_fit(ImageFit::Contain);
+            img.set_size(220, 120);
+            img.set_align(Align::Center, Align::Center);
+        } else if (!spec.icon_url.empty()) {
             auto &img = thumb.add<ImageView>(spec.icon_url);
             img.set_fit(ImageFit::Contain);
             img.set_size(64, 64);
