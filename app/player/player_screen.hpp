@@ -93,6 +93,8 @@ class PlayerScreen : public wnk::ui::Screen {
     void apply_effects(wnk::ui::Ui &ui);
     void reopen_for_effects(wnk::ui::Ui &ui);
     void find_sidecars(const std::string &path);
+    // "Load a subtitle file": the subtitle files in the playing file's folder (a share's too).
+    void offer_subtitle_files(wnk::ui::Ui &ui);
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }

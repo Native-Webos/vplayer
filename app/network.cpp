@@ -222,7 +222,7 @@ std::string take(char *s) {
 }  // namespace
 
 bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
-                         const wnk::async::CancellationToken &cancel, bool interact) {
+                         const wnk::async::CancellationToken &cancel, bool interact, bool show_all) {
     out->clear();
     libvlc_media_t *m = libvlc_media_new_location(vlc_, mrl.c_str());
     if (m == nullptr) {
@@ -230,6 +230,7 @@ bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::v
         return false;
     }
     // Network access, and dialogs (sign-in) allowed; 30 s at most, cancellable.
+    if (show_all) libvlc_media_add_option(m, ":ignore-filetypes=");
     const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network |
                                                               (interact ? libvlc_media_do_interact : 0));
     libvlc_media_parse_with_options(m, flags, 30000);
@@ -389,7 +390,7 @@ std::unique_ptr<NetworkBrowser> make_network_browser(libvlc_instance_t *vlc) {
 
 #if !VPLAYER_HAVE_LIBVLC
 bool list_network_folder(libvlc_instance_t *, const std::string &, std::vector<NetEntry> *out, std::string *error,
-                         const wnk::async::CancellationToken &, bool) {
+                         const wnk::async::CancellationToken &, bool, bool) {
     out->clear();
     *error = "no libVLC in this build";
     return false;

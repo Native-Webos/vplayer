@@ -462,30 +462,7 @@ class PlayerPanel : public View {
         ui.focus(&field);
     }
 
-    void pick_subtitle_file(Ui &ui) {
-        const std::string &path = screen_.current().path;
-        const std::string folder = path.substr(0, path.rfind('/'));
-        std::vector<platform::FileEntry> entries;
-        std::string err;
-        platform::list_folder(folder, &entries, &err, 2000);
-        auto d = std::make_unique<Dialog>("Load a subtitle file");
-        int n = 0;
-        for (const auto &e : entries) {
-            if (e.kind != platform::FileKind::Subtitle || n >= 8) continue;
-            ++n;
-            d->add_button(e.name, [this, file = e.path, name = e.name](Ui &u) {
-                const bool ok = screen_.playback()->add_subtitle_file(file);
-                u.toast(ok ? "Loaded " + name : "Could not load " + name);
-                refresh(u);
-            });
-        }
-        if (n == 0) {
-            ui.toast("No subtitle files in this folder.");
-            return;
-        }
-        d->add_button("Cancel");
-        ui.show_dialog(std::move(d));
-    }
+    void pick_subtitle_file(Ui &ui) { screen_.offer_subtitle_files(ui); }
 
     void build_video(Ui &, Playback &p, PlayerSettings &st) {
         section("PICTURE");
@@ -951,6 +928,55 @@ void PlayerScreen::apply_session() {
         if (r.audio_delay_ms != 0) playback_->set_audio_delay_ms(r.audio_delay_ms);
         if (r.subtitle_delay_ms != 0) playback_->set_subtitle_delay_ms(r.subtitle_delay_ms);
     }
+}
+
+void PlayerScreen::offer_subtitle_files(Ui &ui) {
+    if (queue_.empty()) return;
+    const std::string path = queue_[index_].path;
+    const uint64_t which = opened_;
+    auto show = [this, which](Ui &u, std::vector<std::pair<std::string, std::string>> files) {  // name, path
+        if (which != opened_ || !playback_) return;
+        if (files.empty()) {
+            u.toast("No subtitle files in this folder.");
+            return;
+        }
+        auto d = std::make_unique<Dialog>("Load a subtitle file");
+        for (size_t k = 0; k < files.size() && k < 12; ++k)
+            d->add_button(files[k].first, [this, file = files[k].second, name = files[k].first](Ui &ui2) {
+                const bool ok = playback_ && playback_->add_subtitle_file(file);
+                ui2.toast(ok ? "Loaded " + name : "Could not load " + name);
+            });
+        d->add_button("Cancel");
+        u.show_dialog(std::move(d));
+    };
+    if (path.find("://") == std::string::npos) {  // a drive: quick, here
+        std::vector<platform::FileEntry> entries;
+        std::string err;
+        platform::list_folder(path.substr(0, path.rfind('/')), &entries, &err, 2000);
+        std::vector<std::pair<std::string, std::string>> files;
+        for (const auto &e : entries)
+            if (e.kind == platform::FileKind::Subtitle) files.emplace_back(e.name, e.path);
+        show(ui, std::move(files));
+        return;
+    }
+    // A share: its folder listed on a worker, subtitle files included (VLC's listing hides them).
+    if (s_.vlc == nullptr || mrl_parent(path).empty()) {
+        ui.toast("This address has no folder to look in.");
+        return;
+    }
+    ui.toast("Looking for subtitle files…");
+    wnk::async::run_then_post<std::vector<std::pair<std::string, std::string>>>(
+        s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
+        [vlc = hold_vlc(s_.vlc), folder = mrl_parent(path)](const wnk::async::CancellationToken &cancel) {
+            std::vector<NetEntry> entries;
+            std::string err;
+            std::vector<std::pair<std::string, std::string>> files;
+            if (list_network_folder(vlc.get(), folder, &entries, &err, cancel, false, true))
+                for (const auto &e : entries)
+                    if (e.kind == NetEntry::Kind::Subtitle) files.emplace_back(mrl_display_name(e.mrl), e.mrl);
+            return files;
+        },
+        [this, show](std::vector<std::pair<std::string, std::string>> files) { show(s_.ctx->ui(), std::move(files)); });
 }
 
 void PlayerScreen::find_sidecars(const std::string &path) {

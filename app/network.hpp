@@ -54,8 +54,9 @@ std::unique_ptr<NetworkBrowser> make_network_browser(libvlc_instance_t *vlc);
 
 // The entries of a network folder through libVLC, without starting discovery. Blocking. `interact`:
 // VLC may ask (a sign-in); else a folder needing one fails.
+// `show_all`: also the files VLC's listing leaves out (subtitles, pictures: its ignore-filetypes).
 bool list_network_folder(libvlc_instance_t *vlc, const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
-                         const wnk::async::CancellationToken &cancel, bool interact = true);
+                         const wnk::async::CancellationToken &cancel, bool interact = true, bool show_all = false);
 // The subtitle files beside a network video: its folder listed (no questions asked), and the files
 // VLC's listing matched to it (VLC 3 adds them to what plays only for local files). Call once the
 // video plays (VLC then holds its sign-in). Blocking (a worker). Empty without libVLC.
