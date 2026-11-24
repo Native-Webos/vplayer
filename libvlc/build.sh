@@ -4,7 +4,8 @@
 #
 #   libvlc/build.sh image        build the Docker image (once)
 #   libvlc/build.sh contribs     fetch + build VLC's third-party libraries (static, -fPIC)
-#   libvlc/build.sh vlc          configure + build libvlc, libvlccore and the plugins
+#   libvlc/build.sh vlc          configure + build libvlc, libvlccore and the plugins (then modules)
+#   libvlc/build.sh modules      our own VLC modules (../modules) into the runtime
 #   libvlc/build.sh all          image + contribs + vlc
 #   libvlc/build.sh shell        a shell in the build container
 #
@@ -45,8 +46,9 @@ run() {
 case "${1:-all}" in
     image)    docker build -t "$IMAGE" "$ROOT/libvlc" ;;
     contribs) run bash libvlc/inside/contribs.sh 2>&1 | tee "$ROOT/build/libvlc/logs/contribs.log" ;;
-    vlc)      run bash libvlc/inside/vlc.sh 2>&1 | tee "$ROOT/build/libvlc/logs/vlc.log" ;;
+    vlc)      run bash libvlc/inside/vlc.sh 2>&1 | tee "$ROOT/build/libvlc/logs/vlc.log" && "$0" modules ;;
+    modules)  run bash libvlc/inside/modules.sh 2>&1 | tee "$ROOT/build/libvlc/logs/modules.log" ;;
     all)      "$0" image && "$0" contribs && "$0" vlc ;;
     shell)    DOCKER_TTY=-it run bash ;;
-    *)        echo "usage: $0 [image|contribs|vlc|all|shell]" >&2; exit 2 ;;
+    *)        echo "usage: $0 [image|contribs|vlc|modules|all|shell]" >&2; exit 2 ;;
 esac
