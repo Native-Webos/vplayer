@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/vlc_source.hpp"
 
+#include "player/subtitle_text.hpp"
+#include "vlc_engine.hpp"
+
 #include "wnk_bridge/wnk_bridge.h"
 
 #include "wnk/log.hpp"
@@ -141,6 +144,7 @@ struct VlcSource::Stream {
     std::vector<uint8_t> ps_annexb;  // video: parameter sets to put in front of keyframes
     unsigned width = 0, height = 0, fps_num = 0, fps_den = 0, rate = 0, channels = 0;
     media::VideoColour colour;
+    std::string encoding;  // subtitles: the declared character set, if any
     bool removed = false;
 };
 
@@ -229,7 +233,8 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
             ti.is_default = first_audio;
             first_audio = false;
         } else if (t->i_type == libvlc_track_text) {
-            ti.type = media::TrackType::Subtitle;  // not delivered yet (SubtitleKind::None)
+            ti.type = media::TrackType::Subtitle;
+            ti.subtitle = subtitle_kind(t->i_codec);  // text formats; bitmaps are not delivered yet
         } else {
             continue;
         }
@@ -322,7 +327,18 @@ bool VlcSource::start_player(std::string *error) {
     libvlc_media_t *m = libvlc_media_duplicate(media_);
     const std::string chain = ":sout=" + sout_chain();
     libvlc_media_add_option(m, chain.c_str());
-    libvlc_media_add_option(m, ":no-sout-spu");
+    {
+        // The viewer's subtitle choice and files survive a restart (another audio track, a seek
+        // after the end). A file's stream id may differ in the new player; libVLC selects the file.
+        std::lock_guard<std::mutex> lock(player_mu_);
+        for (const auto &f : subtitle_files_)
+            libvlc_media_slaves_add(m, libvlc_media_slave_type_subtitle, 4, file_uri(f).c_str());
+        if (subtitle_choice_ >= 0) {
+            libvlc_media_add_option(m, (":sub-track-id=" + std::to_string(subtitle_choice_)).c_str());
+        } else if (subtitle_choice_ == -1) {
+            libvlc_media_add_option(m, ":sub-language=none");
+        }
+    }
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway
     if (want_video_ >= 0) {
         libvlc_media_add_option(m, (":video-track-id=" + std::to_string(want_video_)).c_str());
@@ -343,8 +359,12 @@ bool VlcSource::start_player(std::string *error) {
         streams_.clear();
         video_ = audio_ = nullptr;
     }
-    mp_ = libvlc_media_player_new_from_media(m);
+    libvlc_media_player_t *mp = libvlc_media_player_new_from_media(m);
     libvlc_media_release(m);
+    {
+        std::lock_guard<std::mutex> lock(player_mu_);
+        mp_ = mp;
+    }
     if (mp_ == nullptr || libvlc_media_player_play(mp_) != 0) {
         if (error) *error = "libVLC could not start";
         return false;
@@ -361,8 +381,13 @@ void VlcSource::stop_player() {
     }
     space_.notify_all();
     libvlc_media_player_stop(mp_);
-    libvlc_media_player_release(mp_);
-    mp_ = nullptr;
+    libvlc_media_player_t *old;
+    {
+        std::lock_guard<std::mutex> lock(player_mu_);
+        old = mp_;
+        mp_ = nullptr;
+    }
+    libvlc_media_player_release(old);  // the main thread may still hold a reference
 }
 
 // ---- bridge callbacks (VLC threads) ----
@@ -370,6 +395,29 @@ void VlcSource::stop_player() {
 void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
     auto *self = static_cast<VlcSource *>(opaque);
     std::lock_guard<std::mutex> lock(self->mu_);
+    if (d->cat == WNK_ES_SUBTITLE) {
+        auto &seen = self->seen_subtitles_[d->es_id];
+        seen.codec = d->codec;
+        if (subtitle_kind(d->codec) != media::SubtitleKind::Text) {
+            WNK_LOGI(kCat, "subtitle stream %d: %s, not drawn on this path yet", d->es_id, fourcc_text(d->codec).c_str());
+            return nullptr;
+        }
+        auto s = std::make_unique<Stream>();
+        s->cat = d->cat;
+        s->es_id = d->es_id;
+        s->codec = d->codec;
+        if (d->encoding) s->encoding = d->encoding;
+        if (d->codec == fourcc('s', 's', 'a', ' ') && d->extra && d->extra_size) {
+            size_t n = d->extra_size;
+            while (n > 0 && d->extra[n - 1] == 0) --n;
+            seen.ass_header.assign(reinterpret_cast<const char *>(d->extra), n);
+        }
+        WNK_LOGI(kCat, "subtitle stream %d: %s%s%s", d->es_id, fourcc_text(d->codec).c_str(),
+                 d->encoding ? ", " : "", d->encoding ? d->encoding : "");
+        Stream *raw = s.get();
+        self->streams_.push_back(std::move(s));
+        return raw;
+    }
     if (d->cat != WNK_ES_VIDEO && d->cat != WNK_ES_AUDIO) return nullptr;
     if (d->cat == WNK_ES_VIDEO && (self->want_video_ < 0 || self->video_ != nullptr)) return nullptr;
     if (d->cat == WNK_ES_AUDIO && (self->want_audio_ < 0 || self->audio_ != nullptr)) return nullptr;
@@ -437,6 +485,23 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
     std::unique_lock<std::mutex> lock(self->mu_);
     if (self->stopping_ || s->removed) return 0;
 
+    // Subtitles: a cue now, queued without waiting for room and never dropped by a seek (the
+    // controller's store recognises a cue it already has).
+    if (s->cat == WNK_ES_SUBTITLE) {
+        const int64_t t = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
+        if (t == WNK_BRIDGE_NO_TIME) return 0;
+        auto cue = text_subtitle_cue(s->codec, data, size, s->encoding.empty() ? nullptr : s->encoding.c_str(),
+                                     s->es_id, t - self->base_us_, length);
+        if (!cue) return 0;
+        Item item;
+        item.stream = s;
+        item.pts = cue->start_us;
+        item.cue = std::move(cue);
+        self->queue_.push_back(std::move(item));
+        self->cv_.notify_all();
+        return 0;
+    }
+
     // Rebase streams that start far from zero (MPEG-TS clocks), so content time matches libVLC's.
     const int64_t t0 = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
     if (!self->base_known_ && t0 != WNK_BRIDGE_NO_TIME) {
@@ -498,6 +563,12 @@ void VlcSource::on_flush(void *opaque, void *id) {
 void VlcSource::to_packet(Item &item, media::Packet *out) {
     Stream *s = item.stream;
     *out = {};
+    if (item.cue) {
+        out->type = media::TrackType::Subtitle;
+        out->pts_us = item.pts;
+        out->subtitle = std::move(item.cue);
+        return;
+    }
     out->type = s->cat == WNK_ES_VIDEO ? media::TrackType::Video : media::TrackType::Audio;
     out->pts_us = item.pts;
     out->dts_us = item.dts;
@@ -601,6 +672,87 @@ void VlcSource::reset_interrupt() {
     interrupted_ = false;
 }
 
+// ---- subtitles (main thread) ----
+
+libvlc_media_player_t *VlcSource::hold_player() const {
+    std::lock_guard<std::mutex> lock(player_mu_);
+    if (mp_ != nullptr) libvlc_media_player_retain(mp_);
+    return mp_;
+}
+
+std::vector<VlcSource::SubtitleTrack> VlcSource::subtitle_tracks() const {
+    std::vector<SubtitleTrack> out;
+    libvlc_media_player_t *mp = hold_player();
+    if (mp == nullptr) return out;
+    libvlc_track_description_t *list = libvlc_video_get_spu_description(mp);
+    libvlc_media_player_release(mp);
+    std::lock_guard<std::mutex> lock(mu_);
+    for (auto *t = list; t != nullptr; t = t->p_next) {
+        SubtitleTrack st;
+        st.id = t->i_id;
+        st.name = t->psz_name ? t->psz_name : "Track " + std::to_string(t->i_id);
+        if (st.id >= 0) {
+            const media::TrackInfo *ti = info_.track(st.id);
+            const auto seen = seen_subtitles_.find(st.id);
+            if (seen != seen_subtitles_.end()) {
+                st.kind = subtitle_kind(seen->second.codec);
+            } else if (ti != nullptr) {
+                st.kind = ti->subtitle;
+            } else {
+                st.kind = media::SubtitleKind::Text;  // a file libVLC found beside the media: text, mostly
+            }
+        }
+        out.push_back(std::move(st));
+    }
+    if (list != nullptr) libvlc_track_description_list_release(list);
+    if (out.empty()) out.push_back({-1, "Disable", media::SubtitleKind::None});
+    return out;
+}
+
+int VlcSource::subtitle_track() const {
+    libvlc_media_player_t *mp = hold_player();
+    if (mp == nullptr) return -1;
+    const int id = libvlc_video_get_spu(mp);
+    libvlc_media_player_release(mp);
+    return id;
+}
+
+void VlcSource::set_subtitle_track(int id) {
+    {
+        std::lock_guard<std::mutex> lock(player_mu_);
+        subtitle_choice_ = id < 0 ? -1 : id;
+    }
+    libvlc_media_player_t *mp = hold_player();
+    if (mp == nullptr) return;
+    libvlc_video_set_spu(mp, id);
+    libvlc_media_player_release(mp);
+}
+
+bool VlcSource::add_subtitle_file(const std::string &path) {
+    {
+        std::lock_guard<std::mutex> lock(player_mu_);
+        subtitle_files_.push_back(path);
+        subtitle_choice_ = -2;  // the file's stream, once libVLC selects it
+    }
+    libvlc_media_player_t *mp = hold_player();
+    if (mp == nullptr) return false;
+    const bool ok = libvlc_media_player_add_slave(mp, libvlc_media_slave_type_subtitle, file_uri(path).c_str(), true) == 0;
+    libvlc_media_player_release(mp);
+    return ok;
+}
+
+std::string VlcSource::ass_header(int id) const {
+    std::lock_guard<std::mutex> lock(mu_);
+    const auto it = seen_subtitles_.find(id);
+    return it == seen_subtitles_.end() ? std::string() : it->second.ass_header;
+}
+
+std::string VlcSource::subtitle_codec(int id) const {
+    std::lock_guard<std::mutex> lock(mu_);
+    const auto it = seen_subtitles_.find(id);
+    return it == seen_subtitles_.end() ? std::string() : fourcc_text(it->second.codec);
+}
+
 #else  // no libVLC in this build
 
 VlcSource::VlcSource(libvlc_instance_t *vlc, std::vector<std::string> options)
@@ -627,6 +779,13 @@ bool VlcSource::start_player(std::string *) { return false; }
 void VlcSource::stop_player() {}
 std::string VlcSource::sout_chain() const { return {}; }
 void VlcSource::to_packet(Item &, media::Packet *) {}
+libvlc_media_player_t *VlcSource::hold_player() const { return nullptr; }
+std::vector<VlcSource::SubtitleTrack> VlcSource::subtitle_tracks() const { return {}; }
+int VlcSource::subtitle_track() const { return -1; }
+void VlcSource::set_subtitle_track(int) {}
+bool VlcSource::add_subtitle_file(const std::string &) { return false; }
+std::string VlcSource::ass_header(int) const { return {}; }
+std::string VlcSource::subtitle_codec(int) const { return {}; }
 
 #endif
 

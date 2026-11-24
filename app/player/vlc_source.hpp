@@ -16,6 +16,13 @@
 //   seek()    libVLC seeks (fast, to a keyframe); packets from before the jump are dropped until
 //             a video keyframe near the target arrives
 //
+// Subtitles: the subtitle track libVLC has selected (by default flags, language preferences, a
+// file beside the media, or set_subtitle_track) reaches the bridge too. Text formats become cues
+// here (subtitle_text.hpp) and are read as Subtitle packets, which the controller keeps in its
+// store; they never wait for queue room, so they cannot hold up video or audio. Only the selected
+// track is delivered (libVLC selects one subtitle stream at a time), so the subtitle track is
+// changed through libVLC, which then adds the new stream.
+//
 // Back-pressure: the queue holds a few megabytes; when it is full the bridge's send blocks, so
 // libVLC reads only as fast as the controller takes packets.
 //
@@ -28,6 +35,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -56,9 +64,24 @@ class VlcSource final : public wnk::media::MediaSource {
     void interrupt() override;
     void reset_interrupt() override;
 
-    // For the player's panel and info (any thread; libVLC's calls are thread-safe).
-    libvlc_media_player_t *player() const { return mp_; }
     std::string audio_path_text() const;  // "passthrough", "re-encoded to AC-3", "decoded to PCM"
+
+    // Subtitles, from the main thread (libVLC's player, which select() and seek() may replace on the
+    // controller's threads, is held under its own lock while used).
+    struct SubtitleTrack {
+        int id = -1;  // VLC's es id; -1 is "off"
+        std::string name;
+        wnk::media::SubtitleKind kind = wnk::media::SubtitleKind::None;
+    };
+    std::vector<SubtitleTrack> subtitle_tracks() const;  // "off" first, as libVLC lists them
+    int subtitle_track() const;                          // libVLC's selection, -1 for none
+    void set_subtitle_track(int id);
+    bool add_subtitle_file(const std::string &path);     // selected once libVLC has read it
+    // The ASS/SSA script header of a subtitle stream libVLC has delivered (empty otherwise), for
+    // styled rendering.
+    std::string ass_header(int id) const;
+    // The codec label of a delivered subtitle stream ("subt", "ssa", "pgs"), empty if not seen yet.
+    std::string subtitle_codec(int id) const;
 
  private:
     struct Stream;
@@ -67,6 +90,11 @@ class VlcSource final : public wnk::media::MediaSource {
         std::vector<uint8_t> data;
         int64_t pts = wnk::media::kNoTime, dts = wnk::media::kNoTime, duration = 0;
         bool key = false;
+        std::shared_ptr<const wnk::media::SubtitleCue> cue;  // subtitle streams: the decoded cue
+    };
+    struct SeenSubtitle {
+        uint32_t codec = 0;
+        std::string ass_header;
     };
 
     // Bridge callbacks (VLC threads).
@@ -86,7 +114,13 @@ class VlcSource final : public wnk::media::MediaSource {
     std::unique_ptr<wnk_bridge_sink> sink_;
     std::string uri_;
     libvlc_media_t *media_ = nullptr;
+    // Replaced only by the controller's threads (start_player, stop_player); read by the main
+    // thread's subtitle calls through hold_player(), under player_mu_.
     libvlc_media_player_t *mp_ = nullptr;
+    mutable std::mutex player_mu_;
+    libvlc_media_player_t *hold_player() const;  // retained, or nullptr; release when done
+    std::vector<std::string> subtitle_files_;    // added files, given to every new player (player_mu_)
+    int subtitle_choice_ = -2;                   // the viewer's last choice (-2: none yet) (player_mu_)
     wnk::media::MediaInfo info_;
     wnk::media::BackendCaps caps_;
     wnk::media::AudioPath audio_path_ = wnk::media::AudioPath::None;
@@ -98,6 +132,7 @@ class VlcSource final : public wnk::media::MediaSource {
     std::condition_variable space_;    // queue has room
     std::vector<std::unique_ptr<Stream>> streams_;
     Stream *video_ = nullptr, *audio_ = nullptr;
+    std::map<int, SeenSubtitle> seen_subtitles_;  // by es id, kept across restarts of the player
     std::deque<Item> queue_;
     size_t queued_bytes_ = 0;
     bool stopping_ = false, interrupted_ = false;
