@@ -61,6 +61,7 @@ class PlayHistory {
     int64_t resume_ms(const std::string &path) const { return resume_ ? history_resume_ms(list_, path) : 0; }
     void set_resume(bool on) { resume_ = on; }  // Settings: "Continue where I stopped"
     std::vector<HistoryEntry> continue_list(size_t max) const { return history_continue(list_, max); }
+    const std::vector<HistoryEntry> &entries() const { return list_; }  // newest first
     // Bumps on every change (pages redraw their rail when it moves).
     uint64_t generation() const { return generation_; }
 

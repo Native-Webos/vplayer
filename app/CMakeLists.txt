@@ -17,7 +17,7 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp music.cpp music_page.cpp
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp music.cpp music_page.cpp search.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp
@@ -116,6 +116,12 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_library PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_library PRIVATE wnk_platform)
     add_test(NAME unit.vplayer.library COMMAND test_library)
+    # search.cpp's matcher only; the screen needs the whole app.
+    add_executable(test_search tests/test_search.cpp search.cpp library.cpp network.cpp history.cpp app_settings.cpp ui/theme.cpp)
+    target_include_directories(test_search PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_include_directories(test_search SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")
+    target_link_libraries(test_search PRIVATE wnk_app wnk_media)
+    add_test(NAME unit.vplayer.search COMMAND test_search)
 endif ()
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.

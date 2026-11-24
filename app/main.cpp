@@ -11,6 +11,7 @@
 #include "music_page.hpp"
 #include "network_page.hpp"
 #include "playlists_page.hpp"
+#include "search.hpp"
 #include "pages.hpp"
 #include "player/hw_playback.hpp"
 #include "player/player_screen.hpp"
@@ -55,8 +56,8 @@ struct EngineResult {
 
 class MainScreen : public Screen {
  public:
-    MainScreen(vplayer::Services &services, std::function<void(Ui &)> on_settings)
-        : Screen("main"), s_(services) {
+    MainScreen(vplayer::Services &services, std::function<void(Ui &)> on_settings, std::function<void(Ui &)> on_search)
+        : Screen("main"), s_(services), open_search_(std::move(on_search)) {
         auto &col = add<Column>(40);
         col.set_padding(Insets{vui::metric::screen_x, vui::metric::screen_y, vui::metric::screen_x, vui::metric::screen_y});
 
@@ -85,7 +86,7 @@ class MainScreen : public Screen {
         auto &actions = bar.add<Row>(16);
         actions.set_align(Align::End, Align::Center);
         actions.add<vui::IconButton>(vui::icon("search"), "Search",
-                                     [](Ui &ui) { ui.toast("Search is coming soon."); }).name = "top.search";
+                                     [this](Ui &ui) { open_search_(ui); }).name = "top.search";
         actions.add<vui::IconButton>(vui::icon("settings"), "Settings", std::move(on_settings)).name = "top.settings";
 
         // ---- pages ----
@@ -153,6 +154,7 @@ class MainScreen : public Screen {
     std::array<vplayer::Page *, static_cast<size_t>(Tab::Count)> pages_{};
     vplayer::BrowsePage *browse_ = nullptr;
     vplayer::NetworkPage *network_ = nullptr;
+    std::function<void(Ui &)> open_search_;
     Tab current_ = Tab::Video;
 };
 
@@ -177,7 +179,9 @@ class App : public wnk::app::Delegate {
         };
 
         nav_ = &ui.root().add<Navigator>();
-        auto main = std::make_unique<MainScreen>(services_, [this](Ui &u) { show_settings(u); });
+        auto main = std::make_unique<MainScreen>(
+            services_, [this](Ui &u) { show_settings(u); },
+            [this](Ui &u) { nav_->push(u, std::make_unique<vplayer::SearchScreen>(services_)); });
         main_ = main.get();
         nav_->push(ui, std::move(main));
         main_->focus_page(ui);  // start on the hero card, not the first thing in the top bar
