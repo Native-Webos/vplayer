@@ -68,8 +68,11 @@ release and date.
       - audio-only MKV (TrueHD → PCM): NDL
       - MPEG-4 ASP AVI: refused by the TV decoder → software path on its own
 - [ ] Pause/resume and remote seeking on the TV (host-verified; `"at"` launch seek verified)
-- [ ] Subtitles on the hardware path: deliver VLC's SPU streams through the bridge, decode text (SRT,
-      ASS, WebVTT) and bitmap (PGS, DVB) subtitles, draw with the kit's subtitle view
+- [x] Text subtitles on the hardware path (RESEARCH.md §12): SubRip, ASS/SSA (styled by libass), MP4
+      timed text and WebVTT from VLC's subtitle streams, files beside the media, the panel's track
+      choice and delay; within a frame of the picture. On the TV 2026-11-24
+- [ ] Bitmap subtitles on the hardware path (PGS, DVD, DVB): decode in the module or the app
+- [ ] SubRip `{\an8}` (top) placement on the hardware path
 - [ ] Chapters, speed and audio-track switch on the hardware path verified on the TV
 - [ ] Dolby Vision (profile 5/8) declared to Starfish: VLC 3 does not report it; detect from the codec
       setup or RPU NALs

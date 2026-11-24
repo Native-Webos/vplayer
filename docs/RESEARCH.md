@@ -194,3 +194,27 @@ What it took to cross-build VLC 3.0.24 with the webosbrew NDK. Each one is now h
   target (or a decoder that honours a decode-from time).
 - Launch parameters for testing without a remote: `{"play": path, "at": seconds, "panel": tab,
   "decoder": "software"|"hardware", "vlcOptions": [...]}`.
+
+## 12. Subtitles on the hardware path (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
+
+- With `:no-sout-spu` removed, VLC hands the selected subtitle stream to the sout like any other ES.
+  Matroska marks every track default unless told otherwise, so VLC may start with the last one; the
+  viewer's choice goes through `libvlc_video_set_spu`, which makes VLC add the new stream to the sout.
+  Files beside the media are found by VLC itself (`sub-autodetect-file`), names with spaces included.
+- What VLC's demuxers send (VLC 3.0.24): `subt` plain text (SubRip keeps `<i>`/`<font>` tags and
+  `{\an8}`), `ssa ` the Matroska event form "ReadOrder,Layer,Style,..." with the script header as
+  extradata (VLC's own subtitle file reader produces the same form), `tx3g` a 16-bit length then text
+  then style boxes, `wvtt` ISO boxes (vttc → payl) for MP4 and for Matroska/WebM, which VLC repacks.
+  The encoding is only declared when the demuxer knows it (Matroska: UTF-8); VLC's decoder falls back
+  to Windows-1252 for invalid UTF-8, and so does `app/player/subtitle_text.cpp`.
+- The kit's `PlaybackController::subtitles_now()` places cues on its estimated clock, which starts at
+  the first packet fed: with Starfish that ran 0.7–0.9 s ahead of the picture. The snapshot's
+  position comes from Starfish's FRAMEREADY (the presented PTS): cues placed at it were within one
+  frame (measured with a burned-in timer and a cue every 200 ms). The delay slider is applied on top.
+- ASS/SSA tracks are drawn by the kit's libass renderer from the script header (positions, colours,
+  styles as authored); other text is laid out by the kit's subtitle view. SubRip's `{\an8}` is not
+  honoured there (VLC's own renderer puts it at the top).
+- Bitmap formats (PGS, DVD, DVB) still reach the bridge but are not drawn: VLC 3 would have to decode
+  them in the module (its SPU decoders produce subpicture regions), or the app decodes them itself.
+- The rooted TV accepts input events written to `/dev/input/event1` (the IR remote): `app/tools/tv-keys.sh`
+  presses remote keys, which the app cannot tell from the real remote (Back is code 412).
