@@ -817,7 +817,7 @@ void PlayerScreen::start(Ui &ui) {
         ui.toast("Cannot open " + e.name);
         return;
     }
-    find_sidecars(e.path);
+    ++opened_;  // a sidecar search still running is for the previous file
     // The hardware path draws on the TV's video plane under the UI: clear to transparent there.
     const bool plane = playback_->video_plane();
     video_->set_visible(!plane);
@@ -935,6 +935,7 @@ void PlayerScreen::stop_current() {
 void PlayerScreen::apply_session() {
     // What carries over from the previous file, once this one plays (track lists exist by then).
     applied_ = true;
+    if (!queue_.empty()) find_sidecars(queue_[index_].path);  // playing: any sign-in has happened
     apply_speed();
     playback_->apply_audio_effects(settings_.effects());  // live parts (the rest came with the open)
     if (settings_.deinterlace > 0) playback_->set_deinterlace(kDeinterlace[settings_.deinterlace]);
@@ -955,7 +956,7 @@ void PlayerScreen::apply_session() {
 void PlayerScreen::find_sidecars(const std::string &path) {
     // VLC 3 finds subtitle files beside a video only for local files: on a share, the app lists the
     // folder (a worker: the server may be slow) and adds what goes with the video.
-    const uint64_t which = ++opened_;
+    const uint64_t which = opened_;
     const std::string proto = path.substr(0, path.find("://"));
     static const char *const shares[] = {"smb", "nfs", "ftp", "ftps", "sftp"};
     if (s_.vlc == nullptr || path.find("://") == std::string::npos ||
@@ -1234,6 +1235,15 @@ void PlayerScreen::update(Ui &ui, float dt) {
     }
 
     const PlayState state = playback_->state();
+    // A sign-in the viewer just cancelled: the software path would only ask again.
+    const bool declined = std::chrono::steady_clock::now() - s_.login_cancelled < std::chrono::seconds(10);
+    if (state == PlayState::Error && declined) {
+        WNK_LOGI(kCat, "sign-in cancelled: not trying again");
+        ui.toast("Not signed in: this share needs a user name and password.");
+        s_.login_cancelled = {};
+        close(ui);
+        return;
+    }
     if (state == PlayState::Error && playback_->can_fall_back() && !software_) {
         WNK_LOGW(kCat, "TV decoder refused it (%s): software path", playback_->error().c_str());
         ui.toast("The TV decoder cannot play this file. Playing it in software.");

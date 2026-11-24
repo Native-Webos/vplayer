@@ -17,15 +17,19 @@ namespace {
 constexpr const char *kCat = "vlc";
 }
 
-std::string loggable(const std::string &mrl) {
-    const size_t scheme = mrl.find("://");
-    if (scheme == std::string::npos) return mrl;
-    const size_t start = scheme + 3;
-    const size_t at = mrl.find('@', start), slash = mrl.find('/', start);
-    if (at == std::string::npos || (slash != std::string::npos && at > slash)) return mrl;  // no user part
-    const size_t colon = mrl.find(':', start);
-    if (colon == std::string::npos || colon > at) return mrl;  // a user, no password
-    return mrl.substr(0, colon + 1) + "***" + mrl.substr(at);
+std::string loggable(const std::string &text) {
+    std::string out = text;
+    // Each address in the text: "scheme://user:secret@host" keeps all but the secret.
+    for (size_t scheme = out.find("://"); scheme != std::string::npos; scheme = out.find("://", scheme + 3)) {
+        const size_t start = scheme + 3;
+        const size_t end = out.find_first_of("/ '\"\n", start);  // the authority ends here
+        const size_t at = out.find('@', start);
+        if (at == std::string::npos || (end != std::string::npos && at > end)) continue;  // no user part
+        const size_t colon = out.find(':', start);
+        if (colon == std::string::npos || colon > at) continue;  // a user, no password
+        out.replace(colon + 1, at - colon - 1, "***");
+    }
+    return out;
 }
 
 std::string file_uri(const std::string &path) {

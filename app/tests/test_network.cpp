@@ -79,4 +79,6 @@ TEST("loggable") {
     CHECK_EQ(loggable("smb://nas/films/a@b.mkv"), std::string("smb://nas/films/a@b.mkv"));
     CHECK_EQ(loggable("/tmp/usb/a.mkv"), std::string("/tmp/usb/a.mkv"));
     CHECK_EQ(loggable("http://host:8080/live.m3u8"), std::string("http://host:8080/live.m3u8"));
+    CHECK_EQ(loggable("VLC is unable to open the MRL 'smb://u:p@h/a/'. Also ftp://x:y@z/."),
+             std::string("VLC is unable to open the MRL 'smb://u:***@h/a/'. Also ftp://x:***@z/."));
 }

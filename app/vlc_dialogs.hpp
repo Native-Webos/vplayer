@@ -27,6 +27,8 @@ class VlcDialogs {
  public:
     using UiGetter = std::function<wnk::ui::Ui &()>;
     VlcDialogs(libvlc_instance_t *vlc, wnk::async::MainDispatcher &main, UiGetter ui);
+    // Main thread: called when the viewer cancels a sign-in (Cancel or Back).
+    std::function<void()> on_login_cancelled;
     ~VlcDialogs();
     VlcDialogs(const VlcDialogs &) = delete;
     VlcDialogs &operator=(const VlcDialogs &) = delete;

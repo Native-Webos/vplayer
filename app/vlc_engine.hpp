@@ -32,8 +32,9 @@ struct VlcInfo {
 // An absolute local path as a file:// URI for libVLC (percent-encoded: spaces, '#', '%', non-ASCII).
 std::string file_uri(const std::string &path);
 
-// `mrl` for the log: a password in it ("smb://user:secret@nas/...") becomes "***".
-std::string loggable(const std::string &mrl);
+// `text` for the log or the screen: a password in any address in it ("smb://user:secret@nas/...")
+// becomes "***".
+std::string loggable(const std::string &text);
 
 // A reference of its own to the libVLC instance (libvlc_retain), so work on a worker outlives the
 // app's (which releases it when stopping). Take it on the main thread. Null for null.

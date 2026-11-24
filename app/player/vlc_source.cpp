@@ -216,9 +216,13 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         if (error) *error = "libVLC cannot open " + uri;
         return false;
     }
-    // Parse: the track list without playing. Interruptible, bounded.
-    libvlc_media_parse_with_options(media_, static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_local | libvlc_media_parse_network), 10000);
-    for (int i = 0; i < 1100; ++i) {
+    // Parse: the track list without playing. Interruptible, bounded. A network address may ask for a
+    // sign-in (VLC's dialog, shown by the app): allowed, with time to answer it.
+    int flags = libvlc_media_parse_local | libvlc_media_parse_network;
+    if (url) flags |= libvlc_media_do_interact;
+    const int timeout_ms = url ? 120000 : 10000;
+    libvlc_media_parse_with_options(media_, static_cast<libvlc_media_parse_flag_t>(flags), timeout_ms);
+    for (int i = 0; i < timeout_ms / 10 + 100; ++i) {
         const libvlc_media_parsed_status_t s = libvlc_media_get_parsed_status(media_);
         if (s != 0) break;
         {

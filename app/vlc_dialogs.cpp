@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "vlc_dialogs.hpp"
 
+#include "vlc_engine.hpp"
+
 #include "wnk/log.hpp"
 #include "wnk/ui/forms.hpp"
 #include "wnk/ui/widgets.hpp"
@@ -28,6 +30,7 @@ struct VlcDialogsCallbacks {
         auto *s = self(p);
         std::string msg = str(title);
         if (text && *text) msg += (msg.empty() ? "" : ": ") + str(text);
+        msg = loggable(msg);  // VLC's messages quote the address, password and all
         WNK_LOGW(kCat, "libVLC error: %s", msg.c_str());
         s->main_.post([s, alive = std::weak_ptr<bool>(s->alive_), msg] {
             if (alive.lock()) s->ui_().toast(msg, 5000);
@@ -107,12 +110,16 @@ void VlcDialogs::show_login(libvlc_dialog_id *id, const std::string &title, cons
         libvlc_dialog_post_login(id, name.text().c_str(), pass.text().c_str(), remember != nullptr && remember->on());
         WNK_LOGI(kCat, "sign-in sent for %s", name.text().c_str());
     });
-    d->add_button("Cancel", [answered, id](Ui &) {
+    d->add_button("Cancel", [this, answered, id](Ui &) {
         *answered = true;
         libvlc_dialog_dismiss(id);
+        if (on_login_cancelled) on_login_cancelled();
     });
     d->on_dismiss = [this, id, answered](Ui &) {
-        if (!*answered) libvlc_dialog_dismiss(id);
+        if (!*answered) {  // Back
+            libvlc_dialog_dismiss(id);
+            if (on_login_cancelled) on_login_cancelled();
+        }
         open_.erase(id);
     };
     open_[id] = &ui_().show_dialog(std::move(d));

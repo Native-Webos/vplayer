@@ -14,6 +14,7 @@
 #include "wnk/platform/files.hpp"
 #include "wnk/ui/collection.hpp"
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@ struct Services {
     std::function<void()> save_my_playlists;
     class Thumbnails *thumbnails = nullptr;  // video thumbnails, once libVLC runs (thumbnails.hpp)
     libvlc_instance_t *vlc = nullptr;        // once libVLC runs
+    std::chrono::steady_clock::time_point login_cancelled{};  // the viewer last cancelled a sign-in
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;

@@ -222,7 +222,7 @@ std::string take(char *s) {
 }  // namespace
 
 bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::vector<NetEntry> *out, std::string *error,
-                     const wnk::async::CancellationToken &cancel) {
+                         const wnk::async::CancellationToken &cancel, bool interact) {
     out->clear();
     libvlc_media_t *m = libvlc_media_new_location(vlc_, mrl.c_str());
     if (m == nullptr) {
@@ -230,7 +230,8 @@ bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::v
         return false;
     }
     // Network access, and dialogs (sign-in) allowed; 30 s at most, cancellable.
-    const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network | libvlc_media_do_interact);
+    const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network |
+                                                              (interact ? libvlc_media_do_interact : 0));
     libvlc_media_parse_with_options(m, flags, 30000);
     libvlc_media_parsed_status_t st = static_cast<libvlc_media_parsed_status_t>(0);
     for (;;) {
@@ -292,7 +293,8 @@ std::vector<std::string> find_sidecar_subtitles(libvlc_instance_t *vlc, const st
     if (vlc == nullptr || folder.empty()) return out;
     std::vector<NetEntry> entries;
     std::string error;
-    if (!list_network_folder(vlc, folder, &entries, &error, cancel)) return out;
+    // No questions: the file plays already, so VLC holds whatever sign-in it took.
+    if (!list_network_folder(vlc, folder, &entries, &error, cancel, false)) return out;
     const std::string video = mrl_display_name(video_mrl);
     for (const auto &e : entries)
         if (mrl_display_name(e.mrl) == video) out = e.subtitles;
@@ -387,7 +389,7 @@ std::unique_ptr<NetworkBrowser> make_network_browser(libvlc_instance_t *vlc) {
 
 #if !VPLAYER_HAVE_LIBVLC
 bool list_network_folder(libvlc_instance_t *, const std::string &, std::vector<NetEntry> *out, std::string *error,
-                         const wnk::async::CancellationToken &) {
+                         const wnk::async::CancellationToken &, bool) {
     out->clear();
     *error = "no libVLC in this build";
     return false;

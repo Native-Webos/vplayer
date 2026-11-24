@@ -240,6 +240,7 @@ class App : public wnk::app::Delegate {
                     // libVLC's sign-in and certificate questions, and the network page's discovery.
                     dialogs_ = std::make_unique<vplayer::VlcDialogs>(engine_->instance(), ctx.dispatcher(),
                                                                      [&ctx]() -> Ui & { return ctx.ui(); });
+                    dialogs_->on_login_cancelled = [this] { services_.login_cancelled = std::chrono::steady_clock::now(); };
                     main_->network().set_vlc(engine_->instance());
                     thumbnails_ = std::make_unique<vplayer::Thumbnails>(engine_->instance(), thumbnail_dir(ctx),
                                                                         ctx.dispatcher());
