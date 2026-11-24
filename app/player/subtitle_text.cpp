@@ -195,7 +195,7 @@ std::string subrip_plain_text(const std::string &text) {
     return tidy_lines(media::webvtt_plain_text(tidy_lines(no_overrides)));
 }
 
-std::string subrip_ass_header(float scale, bool box) {
+std::string subrip_ass_header(float scale, bool box, bool yellow) {
     // As the plain-text style looks: Inter, white with a black outline (or on a dark box), bottom
     // centre, `scale` of the picture's height, 7 % margin.
     const int size = static_cast<int>(1080 * scale + 0.5f);
@@ -205,13 +205,13 @@ std::string subrip_ass_header(float scale, bool box) {
            "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
            "MarginL, MarginR, MarginV, Encoding\n"
-           "Style: Default,Inter," + std::to_string(size) + ",&H00FFFFFF,&H000000FF," + (box ? back : std::string("&H00000000")) +
+           "Style: Default,Inter," + std::to_string(size) + (yellow ? ",&H0000FFFF" : ",&H00FFFFFF") + ",&H000000FF," + (box ? back : std::string("&H00000000")) +
            "," + back + ",-1,0,0,0,100,100,0,0," + border + ",2,96,96,76,1\n\n"
            "[Events]\nFormat: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
 }
 
-std::string subrip_ass_event(const std::string &text) {
-    if (text.find("{\\") == std::string::npos) return {};  // nothing libass would place differently
+std::string subrip_ass_event(const std::string &text, bool always) {
+    if (!always && text.find("{\\") == std::string::npos) return {};  // nothing libass would place differently
     std::string out;
     for (size_t i = 0; i < text.size(); ++i) {
         const char c = text[i];
@@ -251,7 +251,7 @@ std::string subrip_ass_event(const std::string &text) {
 
 std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const uint8_t *data, size_t size,
                                                             const char *encoding, int track, int64_t start_us,
-                                                            int64_t length_us) {
+                                                            int64_t length_us, bool subrip_all_ass) {
     if (subtitle_kind(f) != media::SubtitleKind::Text || start_us == media::kNoTime) return nullptr;
     auto cue = std::make_shared<media::SubtitleCue>();
     cue->track = track;
@@ -265,7 +265,7 @@ std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const ui
         const std::string text = subtitle_utf8(raw, encoding);
         cue->text = subrip_plain_text(text);
         // Placed or styled lines ({\an8}...) are drawn by libass with subrip_ass_header().
-        const std::string event = subrip_ass_event(text);
+        const std::string event = subrip_ass_event(text, subrip_all_ass);
         if (!event.empty()) cue->ass_events.push_back(event);
     } else if (f == kSsa) {
         const std::string event = subtitle_utf8(raw, encoding);

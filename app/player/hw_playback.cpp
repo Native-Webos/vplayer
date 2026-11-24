@@ -61,6 +61,7 @@ class HwPlayback final : public Playback {
         media::PlaybackOptions po;
         po.autoplay = true;
         auto source = std::make_unique<VlcSource>(vlc, std::move(vlc_options));
+        source->set_force_pcm(options.force_pcm);
         source_ = source.get();  // owned by the controller, which outlives every use here
         controller_ = std::make_unique<media::PlaybackController>(std::move(source), std::move(backend), main, po);
         controller_->set_state_callback([this](media::PlayState from, media::PlayState to,
@@ -193,6 +194,10 @@ class HwPlayback final : public Playback {
     }
     bool add_subtitle_file(const std::string &path) override { return controller_ && source_->add_subtitle_file(path); }
     void set_subtitle_delay_ms(int64_t ms) override { subtitle_delay_us_ = ms * 1000; }
+    // Shifts the audio packets fed from now on; what the decoder holds plays as it was.
+    void set_audio_delay_ms(int64_t ms) override {
+        if (controller_) source_->set_audio_delay_us(ms * 1000);
+    }
     std::vector<std::shared_ptr<const media::SubtitleCue>> subtitle_cues() const override {
         if (!controller_) return {};
         // At the presented position (the backend's, from the frames it reports on screen), not
@@ -211,7 +216,7 @@ class HwPlayback final : public Playback {
         const int track = controller_->subtitle_track();
         const std::string header = source_->ass_header(track);
         // SubRip: libass draws its placed lines ({\an8}) with a style like the plain text's.
-        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header(look_scale_, look_box_);
+        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header(look_scale_, look_box_, look_yellow_);
         return header;
     }
     bool set_picture_area(int mode, float zoom) override {
@@ -220,9 +225,11 @@ class HwPlayback final : public Playback {
         apply_area();
         return true;
     }
-    void set_subtitle_look(float scale, bool box) override {
+    void set_subtitle_look(float scale, bool box, bool yellow) override {
         look_scale_ = scale;
         look_box_ = box;
+        look_yellow_ = yellow;
+        if (controller_) source_->set_subrip_all_ass(yellow);  // the plain-text view draws white only
     }
     std::pair<int, int> video_size() const override {
         if (!controller_) return {0, 0};
@@ -320,6 +327,7 @@ class HwPlayback final : public Playback {
     float area_zoom_ = 1;
     float look_scale_ = 0.055f;
     bool look_box_ = false;
+    bool look_yellow_ = false;
     std::string backend_name_, error_;
 
     // The picture's rectangle in the TV's 1920x1080 app space for the aspect mode and zoom (modes as

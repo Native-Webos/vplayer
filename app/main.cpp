@@ -258,7 +258,9 @@ class App : public wnk::app::Delegate {
         }
         if (hw) {
             WNK_LOGI(kCat, "engine: hardware (TV decoder) for %s", e.name.c_str());
-            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw_, base);
+            auto hw = hw_;
+            hw.force_pcm = settings_.audio_pcm;
+            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw, base);
         }
         if (engine_) {
             WNK_LOGI(kCat, "engine: software (libVLC) for %s", e.name.c_str());
@@ -268,6 +270,7 @@ class App : public wnk::app::Delegate {
             auto options = base;
             options.push_back(":freetype-rel-fontsize=" + std::to_string(rel[std::clamp(settings_.subtitle_size, 0, 3)]));
             if (settings_.subtitle_box) options.push_back(":freetype-background-opacity=160");
+            if (settings_.subtitle_colour == 1) options.push_back(":freetype-color=16776960");  // 0xFFFF00
             return vplayer::open_vlc_playback(engine_->instance(), e.path, options);
         }
         if (vlc_info_ && !vlc_info_->available) return vplayer::open_demo_playback();
@@ -383,6 +386,17 @@ class App : public wnk::app::Delegate {
             settings_.subtitle_box = on;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
+        d->body().add<wnk::ui::Choice>("Subtitle colour", std::vector<std::string>{"White", "Yellow"}, settings_.subtitle_colour,
+                                       [this](Ui &, int i) {
+                                           settings_.subtitle_colour = i;
+                                           vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+                                       });
+        d->body().add<wnk::ui::Choice>("Audio to the TV",
+                                       std::vector<std::string>{"Automatic (as it is, or AC-3)", "Always decoded (PCM)"},
+                                       settings_.audio_pcm ? 1 : 0, [this](Ui &, int i) {
+                                           settings_.audio_pcm = i == 1;
+                                           vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+                                       });
         d->add_button("About VPlayer", [this](Ui &u) { show_about(u); });
         d->add_button("Close");
         ui.show_dialog(std::move(d));

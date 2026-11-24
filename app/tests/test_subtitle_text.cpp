@@ -68,6 +68,13 @@ TEST("subrip_placement_to_ass") {
     CHECK(subrip_ass_header().find("Style: Default,Inter") != std::string::npos);
 }
 
+TEST("subrip_colour") {
+    CHECK(subrip_ass_header(0.055f, false, true).find(",&H0000FFFF,") != std::string::npos);  // yellow (BGR)
+    CHECK(subrip_ass_header(0.055f, false, false).find(",&H00FFFFFF,") != std::string::npos);
+    CHECK_EQ(subrip_ass_event("plain", true), std::string("0,0,Default,,0,0,0,,plain"));
+    CHECK(subrip_ass_event("plain", false).empty());
+}
+
 TEST("subrip_open_end_and_nul") {
     auto c = cue("subt", std::string("Line\0", 5), nullptr, 0);
     REQUIRE(c != nullptr);

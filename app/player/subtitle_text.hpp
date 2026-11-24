@@ -32,15 +32,18 @@ wnk::media::SubtitleKind subtitle_kind(uint32_t vlc_fourcc);
 // One packet → a cue of `track` from `start_us`, lasting `length_us` (0: until the next cue).
 // nullptr if the codec is not a text one this file handles or the packet is malformed. An empty
 // payload gives an empty cue, which clears the track.
+// `subrip_all_ass`: SubRip lines all get ASS events (a text colour other than white).
 std::shared_ptr<const wnk::media::SubtitleCue> text_subtitle_cue(uint32_t vlc_fourcc, const uint8_t *data, size_t size,
                                                                  const char *encoding, int track, int64_t start_us,
-                                                                 int64_t length_us);
+                                                                 int64_t length_us, bool subrip_all_ass = false);
 
 // SubRip lines with ASS override tags ({\an8} to place them at the top, colours...) are also given as
 // an ASS event, drawn by libass with this script header (styled as the plain text is); lines
 // without tags stay plain text. Empty when the line has no override tag.
-std::string subrip_ass_header(float scale = 0.055f, bool box = false);
-std::string subrip_ass_event(const std::string &utf8_text);
+// `yellow`: the text colour (Settings), else white.
+std::string subrip_ass_header(float scale = 0.055f, bool box = false, bool yellow = false);
+// `always`: also lines without tags (to draw every line in the header's colour).
+std::string subrip_ass_event(const std::string &utf8_text, bool always = false);
 
 // Helpers, exposed for tests.
 std::string subtitle_utf8(const std::string &text, const char *encoding);  // valid UTF-8 out

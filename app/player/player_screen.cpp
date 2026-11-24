@@ -772,7 +772,7 @@ void PlayerScreen::start(Ui &ui) {
         subs_->set_text_scale(scale);
         subs_->set_text_style(s_.settings->subtitle_box ? wnk::media::SubtitleView::TextStyle::Box
                                                        : wnk::media::SubtitleView::TextStyle::Outline);
-        playback_->set_subtitle_look(scale, s_.settings->subtitle_box);
+        playback_->set_subtitle_look(scale, s_.settings->subtitle_box, s_.settings->subtitle_colour == 1);
     }
     subs_track_ = -2;
     subs_size_ = {0, 0};

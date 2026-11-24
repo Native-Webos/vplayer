@@ -314,6 +314,13 @@ bool VlcSource::select(int video_track, int audio_track, const media::BackendCap
     if (a != nullptr) {
         audio_path_ = media::audio_path(caps, *a);
         const double speed = speed_.load();
+        if (force_pcm_.load() && audio_path_ != media::AudioPath::Pcm) {
+            if (!caps.accepts(CodecId::PcmS16)) {
+                if (error) *error = "the TV decoder takes no PCM";
+                return false;
+            }
+            audio_path_ = media::AudioPath::Pcm;  // Settings: always decoded
+        }
         if (speed != 1.0) {
             // Another speed: VLC decodes to stereo PCM, which is time-stretched here (pitch kept).
             if (!caps.accepts(CodecId::PcmS16)) {
@@ -579,7 +586,7 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
                 s->bitmap->set_video_size(static_cast<int>(self->video_->width), static_cast<int>(self->video_->height));
             cues = s->bitmap->decode(data, size, s->es_id, t - self->base_us_);
         } else if (auto cue = text_subtitle_cue(s->codec, data, size, s->encoding.empty() ? nullptr : s->encoding.c_str(),
-                                                s->es_id, t - self->base_us_, length)) {
+                                                s->es_id, t - self->base_us_, length, self->subrip_all_ass_.load())) {
             cues.push_back(std::move(cue));
         }
         for (auto &cue : cues) {
@@ -801,7 +808,14 @@ bool VlcSource::to_packet(Item &item, media::Packet *out) {
     } else {
         out->data = std::move(item.data);
     }
-    if (stretch_ && s->cat == WNK_ES_AUDIO) return stretch_audio(out);
+    if (stretch_ && s->cat == WNK_ES_AUDIO && !stretch_audio(out)) return false;
+    if (s->cat == WNK_ES_AUDIO) {  // the viewer's audio delay
+        const int64_t d = audio_delay_us_.load();
+        if (d != 0) {
+            if (out->pts_us != kNoTime) out->pts_us += d;
+            if (out->dts_us != kNoTime) out->dts_us += d;
+        }
+    }
     return true;
 }
 

@@ -74,6 +74,13 @@ class VlcSource final : public wnk::media::MediaSource {
     // here (wnk::media::TimeStretch), timestamps kept in content time.
     bool set_speed(double speed, std::string *why) override;
 
+    // Audio later (positive) or earlier than the picture, from the next packets read. Any thread.
+    void set_audio_delay_us(int64_t us) { audio_delay_us_.store(us); }
+    // Always give the TV decoded PCM (Settings: audio "Decoded"), from the next select().
+    void set_force_pcm(bool on) { force_pcm_.store(on); }
+    // Every SubRip line as an ASS event too (Settings: a subtitle colour other than white).
+    void set_subrip_all_ass(bool on) { subrip_all_ass_.store(on); }
+
     std::string audio_path_text() const;  // "passthrough", "re-encoded to AC-3", "decoded to PCM"
     // How Dolby Vision is played ("Profile 8.1 (configuration record)"), empty when it is not.
     std::string dovi_text() const;
@@ -157,6 +164,9 @@ class VlcSource final : public wnk::media::MediaSource {
     std::string dovi_text_;             // mu_
     std::vector<wnk::media::FontAttachment> fonts_;  // mu_
     std::atomic<double> speed_{1.0};
+    std::atomic<int64_t> audio_delay_us_{0};
+    std::atomic<bool> force_pcm_{false};
+    std::atomic<bool> subrip_all_ass_{false};
     // Reader thread (select() runs while it is parked): the stretcher and its timeline.
     std::unique_ptr<wnk::media::TimeStretch> stretch_;
     int64_t stretch_base_us_ = wnk::media::kNoTime, stretch_in_us_ = wnk::media::kNoTime, stretch_frames_ = 0;

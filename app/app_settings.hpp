@@ -18,6 +18,8 @@ struct AppSettings {
     bool resume = true;
     int subtitle_size = 1;      // 0 small, 1 normal, 2 large, 3 huge
     bool subtitle_box = false;  // on a dark box instead of an outline
+    int subtitle_colour = 0;    // 0 white, 1 yellow
+    bool audio_pcm = false;     // the TV decoder always gets decoded PCM (no passthrough, no AC-3)
 };
 
 // Text height as a fraction of the picture's, for each subtitle_size.

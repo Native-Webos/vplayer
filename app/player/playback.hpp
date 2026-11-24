@@ -150,9 +150,11 @@ class Playback {
         (void)zoom;
         return false;
     }
-    virtual void set_subtitle_look(float scale, bool box) {
+    // How text subtitles should look (Settings): height as a fraction of the picture, on a box, yellow.
+    virtual void set_subtitle_look(float scale, bool box, bool yellow) {
         (void)scale;
         (void)box;
+        (void)yellow;
     }
 
     // ---- timing ----

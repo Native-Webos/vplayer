@@ -35,6 +35,7 @@ namespace vplayer {
 struct HwOptions {
     bool dolby_vision = false;
     bool atmos = false;
+    bool force_pcm = false;  // Settings: audio always decoded to PCM for the TV
 };
 
 // Whether this device has a hardware decoder the kit can drive (Starfish or NDL). Cached.
