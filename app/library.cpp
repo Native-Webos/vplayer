@@ -65,6 +65,31 @@ std::vector<platform::FileEntry> recent_videos(const std::vector<platform::Remov
     return videos;
 }
 
+std::vector<platform::FileEntry> scan_files(const std::vector<platform::RemovableVolume> &volumes,
+                                            const std::vector<platform::FileKind> &kinds, int max_depth,
+                                            size_t max_entries) {
+    std::vector<platform::FileEntry> out;
+    std::deque<std::pair<std::string, int>> queue;
+    for (const auto &v : volumes) queue.emplace_back(v.path, 0);
+    size_t seen = 0;
+    while (!queue.empty() && seen < max_entries) {
+        auto [dir, depth] = queue.front();
+        queue.pop_front();
+        std::vector<platform::FileEntry> entries;
+        std::string error;
+        if (!platform::list_folder(dir, &entries, &error, max_entries - seen)) continue;
+        seen += entries.size();
+        for (auto &e : entries) {
+            if (e.kind == platform::FileKind::Folder) {
+                if (depth + 1 <= max_depth) queue.emplace_back(e.path, depth + 1);
+            } else if (std::find(kinds.begin(), kinds.end(), e.kind) != kinds.end()) {
+                out.push_back(std::move(e));
+            }
+        }
+    }
+    return out;
+}
+
 std::string format_bytes(uint64_t bytes) {
     static const char *units[] = {"B", "KB", "MB", "GB", "TB"};
     double v = static_cast<double>(bytes);

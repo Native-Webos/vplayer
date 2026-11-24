@@ -26,6 +26,12 @@ bool same_volumes(const std::vector<wnk::platform::RemovableVolume> &a,
 std::vector<wnk::platform::FileEntry> recent_videos(const std::vector<wnk::platform::RemovableVolume> &volumes,
                                                     size_t count, int max_depth = 3, size_t max_entries = 4000);
 
+// Every file of the given kinds on `volumes` (and folders deep), in folder order. Bounded like
+// recent_videos. Blocking: a worker.
+std::vector<wnk::platform::FileEntry> scan_files(const std::vector<wnk::platform::RemovableVolume> &volumes,
+                                                 const std::vector<wnk::platform::FileKind> &kinds, int max_depth = 4,
+                                                 size_t max_entries = 20000);
+
 // "4.2 GB", "731 MB", "12 KB".
 std::string format_bytes(uint64_t bytes);
 // "MKV" for "Film.mkv"; empty without an extension.
