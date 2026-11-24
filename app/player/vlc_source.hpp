@@ -33,6 +33,7 @@
 
 #include "wnk/media/media.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -122,6 +123,7 @@ class VlcSource final : public wnk::media::MediaSource {
     mutable std::mutex player_mu_;
     libvlc_media_player_t *hold_player() const;  // retained, or nullptr; release when done
     std::vector<std::string> subtitle_files_;    // added files, given to every new player (player_mu_)
+    mutable std::atomic<int> last_subtitle_{-1};  // libVLC's selection while its input was live
     int subtitle_choice_ = -2;                   // the viewer's last choice (-2: none yet) (player_mu_)
     wnk::media::MediaInfo info_;
     wnk::media::BackendCaps caps_;

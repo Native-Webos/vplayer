@@ -781,10 +781,14 @@ std::vector<VlcSource::SubtitleTrack> VlcSource::subtitle_tracks() const {
 
 int VlcSource::subtitle_track() const {
     libvlc_media_player_t *mp = hold_player();
-    if (mp == nullptr) return -1;
-    const int id = libvlc_video_get_spu(mp);
+    if (mp == nullptr) return last_subtitle_.load();
+    // libVLC reads ahead of the picture and reports no track once its input has ended; the TV is
+    // still playing what was read, so the last answer from a live input stands.
+    const libvlc_state_t st = libvlc_media_player_get_state(mp);
+    if (st == libvlc_Playing || st == libvlc_Paused || st == libvlc_Buffering)
+        last_subtitle_.store(libvlc_video_get_spu(mp));
     libvlc_media_player_release(mp);
-    return id;
+    return last_subtitle_.load();
 }
 
 void VlcSource::set_subtitle_track(int id) {
@@ -792,6 +796,7 @@ void VlcSource::set_subtitle_track(int id) {
         std::lock_guard<std::mutex> lock(player_mu_);
         subtitle_choice_ = id < 0 ? -1 : id;
     }
+    last_subtitle_.store(id < 0 ? -1 : id);
     libvlc_media_player_t *mp = hold_player();
     if (mp == nullptr) return;
     libvlc_video_set_spu(mp, id);
