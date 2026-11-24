@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# inject_cc.py IN.h264 FPS OUT.h264 : adds CEA-608 closed captions (CC1) to an H.264 Annex-B stream
+# inject_cc.py IN.h264 FPS OUT.h264 : adds CEA-608 (CC1) and CEA-708 (service 1) closed captions to an H.264 Annex-B stream
 # made with AUDs and no B-frames (decode order = presentation order): an ATSC A/53 "GA94" SEI
 # before the first slice of each access unit, one byte pair per frame.
 #
@@ -59,10 +59,30 @@ def pop_on(lines):
     return p
 
 
-def sei(pairs):
-    cc = bytearray([0xB5, 0x00, 0x31]) + b'GA94' + bytes([0x03, 0x40 | len(pairs), 0xFF])
+def dtvcc(service1, seq):
+    """DTVCC packets carrying `service1` for service 1, as (cc_type, b1, b2) triplets: 3 starts a packet,
+    2 continues it. A service block holds at most 31 bytes: longer data goes in a packet per block."""
+    out = []
+    for k in range(0, len(service1), 31):
+        chunk = bytes(service1[k:k + 31])
+        p = bytearray([0, (1 << 5) | len(chunk)]) + chunk
+        if len(p) % 2:
+            p.append(0)
+        p[0] = (((seq + k // 31) & 3) << 6) | (len(p) // 2)
+        out += [(3 if i == 0 else 2, p[i], p[i + 1]) for i in range(0, len(p), 2)]
+    return out
+
+
+def define_window(wid, rows, cols, visible=True):
+    return bytes([0x98 + wid, (0x20 if visible else 0), 0, 0, rows - 1, cols - 1, 0])
+
+
+def sei(pairs, pairs708=()):
+    cc = bytearray([0xB5, 0x00, 0x31]) + b'GA94' + bytes([0x03, 0x40 | (len(pairs) + len(pairs708)), 0xFF])
     for a, b in pairs:
         cc += bytes([0xFC, a, b])
+    for t, a, b in pairs708:
+        cc += bytes([0xFC | t, a, b])
     cc.append(0xFF)  # marker bits
     payload = bytearray([0x04, len(cc)]) + cc
     payload.append(0x80)  # rbsp trailing bits
@@ -104,18 +124,32 @@ def main():
     queue = []
     for t in sorted(script):
         queue.append((int(round(t * fps)), script[t]))
+    # CEA-708 service 1: a two-row window from 1 s, a second caption at 6 s (é from G1), gone at 12 s.
+    s708 = {
+        1.0: define_window(0, 2, 32) + b'DIGITAL CAPTIONS (CEA-708)' + bytes([0x0D]) + b'second row, from 1 s',
+        6.0: bytes([0x88, 0x01]) + bytes([0x92, 0, 0]) + b'caf' + bytes([0xE9]) + b' (708) at 6 s',
+        12.0: bytes([0x8C, 0x01]),
+    }
+    queue708 = []
+    for k, t in enumerate(sorted(s708)):
+        queue708.append((int(round(t * fps)), dtvcc(s708[t], 2 * k)))
+    pending708 = []
     pending = []
     out = bytearray()
     for i, au in enumerate(aus):
         while queue and queue[0][0] <= i:
             pending += queue.pop(0)[1]
+        while queue708 and queue708[0][0] <= i:
+            pending708 += queue708.pop(0)[1]
+        send708 = pending708[:8]
+        pending708 = pending708[8:]
         # Two pairs per frame at most (25 fps: 50 pairs a second, beyond the 30 of broadcast; fine).
         send = pending[:2] or [(0x80, 0x80)]
         pending = pending[2:]
         first_slice = next((k for k, n in enumerate(au) if (n[0] & 0x1F) in (1, 5)), len(au))
         for k, n in enumerate(au):
             if k == first_slice:
-                out += b'\x00\x00\x00\x01' + sei(send)
+                out += b'\x00\x00\x00\x01' + sei(send, send708)
             out += b'\x00\x00\x00\x01' + n
     open(dst, 'wb').write(out)
     print(len(aus), 'access units with captions')
