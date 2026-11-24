@@ -9,13 +9,6 @@ namespace {
 int align(int v, int a) { return (v + a - 1) / a * a; }
 }  // namespace
 
-const char *vlc_equalizer_preset(int i) {
-    static const char *names[] = {"flat", "classical", "club", "dance", "fullbass", "fullbasstreble",
-                                  "fulltreble", "headphones", "largehall", "live", "party", "pop",
-                                  "reggae", "rock", "ska", "soft", "softrock", "techno"};
-    return i >= 0 && i < 18 ? names[i] : "flat";
-}
-
 std::vector<std::string> equalizer_preset_labels() {
     return {"Flat", "Classical", "Club", "Dance", "Full bass", "Full bass and treble", "Full treble", "Headphones",
             "Large hall", "Live", "Party", "Pop", "Reggae", "Rock", "Ska", "Soft", "Soft rock", "Techno"};

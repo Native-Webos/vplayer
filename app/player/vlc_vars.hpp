@@ -15,4 +15,9 @@ namespace vplayer {
 // `filters`: VLC audio filter modules, ':' between them ("equalizer:normvol"). False without libVLC.
 bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filters);
 
+// A module option on the player, for the objects made under it that inherit it: the audio output
+// and the stream output (media options do not reach a sout's filters, whose parent is the player,
+// not the input). Created when the player lacks the variable. Before play.
+bool set_player_option(libvlc_media_player_t *mp, const char *name, float value);
+
 }  // namespace vplayer

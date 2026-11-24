@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/vlc_source.hpp"
+#include "player/vlc_vars.hpp"
 
 #include "player/dovi_detect.hpp"
 #include "player/mkv_attachments.hpp"
@@ -444,10 +445,6 @@ bool VlcSource::start_player(std::string *error) {
     // The media's own timestamps: VLC 3 converts a sout's to its playback clock, which restarts
     // at every seek (libvlc/patches/vlc/0004 adds the option).
     libvlc_media_add_option(m, ":sout-stream-time");
-    if (effects_.equalizer >= 0)
-        libvlc_media_add_option(m, (std::string(":equalizer-preset=") + vlc_equalizer_preset(effects_.equalizer)).c_str());
-    if (effects_.volume != 100)
-        libvlc_media_add_option(m, (":gain-value=" + std::to_string(effects_.volume / 100.0)).c_str());
     // Only the selected streams (VLC 3 streams every one by default, transcoding each audio track).
     libvlc_media_add_option(m, ":no-sout-all");
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway
@@ -472,6 +469,17 @@ bool VlcSource::start_player(std::string *error) {
     }
     libvlc_media_player_t *mp = libvlc_media_player_new_from_media(m);
     libvlc_media_release(m);
+    // The audio effects' settings, for the transcode's filters (which inherit from the player).
+    // The equalizer wants bands (VLC 3's filter fails with a preset alone): libVLC's own call sets
+    // the player's bands and preamp, as for playback.
+    if (mp != nullptr && effects_.equalizer >= 0) {
+        if (libvlc_equalizer_t *eq = libvlc_audio_equalizer_new_from_preset(static_cast<unsigned>(effects_.equalizer))) {
+            libvlc_media_player_set_equalizer(mp, eq);
+            libvlc_audio_equalizer_release(eq);
+        }
+    }
+    if (mp != nullptr && effects_.volume != 100 && !set_player_option(mp, "gain-value", effects_.volume / 100.0f))
+        WNK_LOGW(kCat, "gain not set");
     {
         std::lock_guard<std::mutex> lock(player_mu_);
         mp_ = mp;

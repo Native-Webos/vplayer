@@ -101,8 +101,7 @@ struct AudioEffects {
     }
     bool operator!=(const AudioEffects &o) const { return !(*this == o); }
 };
-// VLC's equalizer preset names and people's names for them, in libVLC's order.
-const char *vlc_equalizer_preset(int index);
+// People's names for VLC's equalizer presets, in libVLC's order.
 std::vector<std::string> equalizer_preset_labels();
 
 // Picture adjustments (VLC's "adjust" filter). Neutral values: 1, 1, 1, 1, 0.
