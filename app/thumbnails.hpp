@@ -14,6 +14,7 @@
 #include "wnk/async/async.hpp"
 #include "wnk/platform/files.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -63,6 +64,7 @@ class Thumbnails {
     std::deque<std::pair<std::string, std::string>> queue_;  // path, cache file
     std::set<std::string> queued_, failed_;
     bool paused_ = false, stop_ = false;
+    std::atomic<bool> quitting_{false};  // make() gives up its waits at once
     std::thread thread_;
 };
 

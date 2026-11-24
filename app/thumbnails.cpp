@@ -99,6 +99,7 @@ Thumbnails::~Thumbnails() {
         std::lock_guard<std::mutex> lock(mu_);
         stop_ = true;
     }
+    quitting_ = true;
     cv_.notify_all();
     if (thread_.joinable()) thread_.join();
     alive_.reset();
@@ -186,7 +187,7 @@ bool Thumbnails::make(const std::string &path, const std::string &out) {
     if (m == nullptr) return false;
     // The picture's size and the duration, for the position and the scaled height.
     libvlc_media_parse_with_options(m, libvlc_media_parse_local, 3000);
-    for (int i = 0; i < 350 && libvlc_media_get_parsed_status(m) == 0; ++i)
+    for (int i = 0; i < 350 && libvlc_media_get_parsed_status(m) == 0 && !quitting_; ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     int vw = 0, vh = 0;
     libvlc_media_track_t **tracks = nullptr;
@@ -197,7 +198,7 @@ bool Thumbnails::make(const std::string &path, const std::string &out) {
             vh = static_cast<int>(tracks[i]->video->i_height);
         }
     if (n > 0) libvlc_media_tracks_release(tracks, n);
-    if (vw <= 0 || vh <= 0) {
+    if (vw <= 0 || vh <= 0 || quitting_) {
         libvlc_media_release(m);
         return false;
     }
@@ -223,7 +224,9 @@ bool Thumbnails::make(const std::string &path, const std::string &out) {
     bool got = false;
     if (libvlc_media_player_play(mp) == 0) {
         std::unique_lock<std::mutex> lock(g.mu);
-        got = g.cv.wait_for(lock, std::chrono::seconds(8), [&] { return g.shown >= 1; });
+        // 8 s at most, in steps so that quitting the app does not wait for it.
+        for (int i = 0; i < 80 && !got && !quitting_; ++i)
+            got = g.cv.wait_for(lock, std::chrono::milliseconds(100), [&] { return g.shown >= 1; });
     }
     libvlc_media_player_stop(mp);
     libvlc_media_player_release(mp);
