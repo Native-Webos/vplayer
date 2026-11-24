@@ -84,6 +84,10 @@ std::unique_ptr<VlcEngine> VlcEngine::create(const std::string &app_dir, VlcInfo
         // H.264/HEVC deblocking filter on non-reference frames (invisible in motion, ~20-30% less work).
         "--avcodec-fast",
         "--avcodec-skiploopfilter=1",  // VLC's "large" (smaller numbers are bigger): TV viewing distance
+        // HTTPS: GnuTLS's built-in system store path is not webOS's, so every certificate was "not
+        // trusted"; the TV keeps its CAs as PEM files in /etc/ssl/certs.
+        "--no-gnutls-system-trust",
+        "--gnutls-dir-trust=/etc/ssl/certs",
     };
     const auto start = std::chrono::steady_clock::now();
     libvlc_instance_t *vlc = libvlc_new(sizeof args / sizeof *args, args);
