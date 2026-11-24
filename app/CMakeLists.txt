@@ -39,6 +39,7 @@ if (WNK_WEBOS AND EXISTS "${_vlc_runtime}/lib/libvlc.so.5" AND EXISTS "${_vlc_in
     message(STATUS "vplayer: libVLC from ${VPLAYER_LIBVLC_DIR}")
     target_compile_definitions(vplayer PRIVATE VPLAYER_HAVE_LIBVLC=1)
     target_include_directories(vplayer SYSTEM PRIVATE "${_vlc_include}")
+    target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../modules/wnk_keystore")
     # VLC's plugin headers (they include one another by bare name), for the one file that needs them.
     set_source_files_properties(player/vlc_vars.cpp PROPERTIES COMPILE_OPTIONS "-isystem;${_vlc_include}/vlc/plugins")
     target_link_libraries(vplayer PRIVATE "${_vlc_runtime}/lib/libvlc.so.5" "${_vlc_runtime}/lib/libvlccore.so.9")
@@ -69,7 +70,7 @@ wnk_add_webos_package(
         LARGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/largeIcon.png"
         ICON_COLOR "#e85d04"
         EXPECTED_NEEDED "${CMAKE_CURRENT_SOURCE_DIR}/expected-needed.txt"
-        REQUIRED_PERMISSIONS database.operation
+        REQUIRED_PERMISSIONS database.operation securitykey.operation
         EXTRA_DIRS "${VPLAYER_FONT_DIR}" "${VPLAYER_ICON_DIR}" ${VPLAYER_LIBVLC_PACKAGE_DIRS})
 
 # Host: the player opens (demo engine), shows its first frame and closes with Back.

@@ -29,6 +29,8 @@ class VlcDialogs {
     VlcDialogs(libvlc_instance_t *vlc, wnk::async::MainDispatcher &main, UiGetter ui);
     // Main thread: called when the viewer cancels a sign-in (Cancel or Back).
     std::function<void()> on_login_cancelled;
+    // The sign-in's "remember" switch (shown when VLC can keep sign-ins): says how they are kept.
+    std::string remember_label = "Remember on this TV";
     ~VlcDialogs();
     VlcDialogs(const VlcDialogs &) = delete;
     VlcDialogs &operator=(const VlcDialogs &) = delete;

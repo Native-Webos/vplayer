@@ -216,7 +216,7 @@ class App : public wnk::app::Delegate {
                         r.my_playlists = vplayer::my_playlists_from_json(e.value);
                 }
                 r.settings = vplayer::read_settings(store);
-                r.engine = vplayer::VlcEngine::create(app_dir, r.info);
+                r.engine = vplayer::VlcEngine::create(app_dir, r.info, store);
                 // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
                 r.hw_available = vplayer::hw_playback_available(&r.hw_why);
                 if (r.hw_available) {
@@ -241,6 +241,8 @@ class App : public wnk::app::Delegate {
                     dialogs_ = std::make_unique<vplayer::VlcDialogs>(engine_->instance(), ctx.dispatcher(),
                                                                      [&ctx]() -> Ui & { return ctx.ui(); });
                     dialogs_->on_login_cancelled = [this] { services_.login_cancelled = std::chrono::steady_clock::now(); };
+                    if (engine_->remembers_signins() && !engine_->signins_encrypted())
+                        dialogs_->remember_label = "Remember on this TV (this TV stores it unencrypted)";
                     main_->network().set_vlc(engine_->instance());
                     thumbnails_ = std::make_unique<vplayer::Thumbnails>(engine_->instance(), thumbnail_dir(ctx),
                                                                         ctx.dispatcher());

@@ -103,7 +103,7 @@ void VlcDialogs::show_login(libvlc_dialog_id *id, const std::string &title, cons
     name.set_text(user);
     auto &pass = d->body().add<TextField>("Password");
     pass.set_password(true);
-    Toggle *remember = ask_store ? &d->body().add<Toggle>("Remember on this TV", true) : nullptr;
+    Toggle *remember = ask_store ? &d->body().add<Toggle>(remember_label, true) : nullptr;
     auto answered = std::make_shared<bool>(false);
     d->add_button("Sign in", [this, id, answered, &name, &pass, remember](Ui &) {
         *answered = true;

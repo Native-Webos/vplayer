@@ -12,6 +12,8 @@
 #pragma once
 
 #include <chrono>
+#include "wnk/storage/kv.hpp"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -42,17 +44,26 @@ std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc);
 
 class VlcEngine {
  public:
-    // app_dir: the directory holding the executable (LaunchInfo::app_dir).
-    static std::unique_ptr<VlcEngine> create(const std::string &app_dir, VlcInfo &info);
-    ~VlcEngine();
+    // app_dir: the directory holding the executable (LaunchInfo::app_dir). `store`: where VLC's saved
+    // sign-ins go (through the kit's secret store, sealed by keymanager3 where the firmware has it);
+    // null: sign-ins are kept only while the app runs.
+    static std::unique_ptr<VlcEngine> create(const std::string &app_dir, VlcInfo &info,
+                                             wnk::storage::KeyValueStore *store = nullptr);
     VlcEngine(const VlcEngine &) = delete;
     VlcEngine &operator=(const VlcEngine &) = delete;
 
     libvlc_instance_t *instance() const { return vlc_; }
+    // Whether VLC can keep sign-ins across launches, and whether they are encrypted then.
+    bool remembers_signins() const { return signins_ != nullptr; }
+    bool signins_encrypted() const { return encrypted_; }
+    ~VlcEngine();
 
  private:
-    explicit VlcEngine(libvlc_instance_t *vlc) : vlc_(vlc) {}
+    struct Signins;  // the secret store and the callbacks wnk_keystore calls
+    VlcEngine(libvlc_instance_t *vlc, std::unique_ptr<Signins> signins, bool encrypted);
+    std::unique_ptr<Signins> signins_;  // declared first: destroyed after libVLC is released
     libvlc_instance_t *vlc_ = nullptr;
+    bool encrypted_ = false;
 };
 
 }  // namespace vplayer
