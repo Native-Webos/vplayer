@@ -20,7 +20,8 @@ include("${_kit}/cmake/WnkApp.cmake")
 add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
-        player/subtitle_bitmap.cpp player/dovi_detect.cpp)
+        player/subtitle_bitmap.cpp player/dovi_detect.cpp
+        player/ebml.cpp)
 # ../modules: the wnk_bridge contract (wnk_bridge/wnk_bridge.h) shared with our VLC stream output.
 target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../modules")
 # The kit's playback controller and the TV's decoders (Starfish, NDL; dlopened, never DT_NEEDED).
@@ -84,7 +85,7 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_subtitle_bitmap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_subtitle_bitmap PRIVATE wnk_media)
     add_test(NAME unit.vplayer.subtitle_bitmap COMMAND test_subtitle_bitmap)
-    add_executable(test_dovi_detect tests/test_dovi_detect.cpp player/dovi_detect.cpp)
+    add_executable(test_dovi_detect tests/test_dovi_detect.cpp player/dovi_detect.cpp player/ebml.cpp)
     target_include_directories(test_dovi_detect PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_dovi_detect PRIVATE wnk_media)
     add_test(NAME unit.vplayer.dovi_detect COMMAND test_dovi_detect)
