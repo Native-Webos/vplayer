@@ -35,6 +35,7 @@
 
 #include "wnk/media/dovi.hpp"
 #include "wnk/media/media.hpp"
+#include "wnk/media/time_stretch.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -69,6 +70,9 @@ class VlcSource final : public wnk::media::MediaSource {
     bool seek(int64_t pts_us, std::string *error) override;
     void interrupt() override;
     void reset_interrupt() override;
+    // Other speeds from the next select(): audio decoded to stereo PCM by VLC and time-stretched
+    // here (wnk::media::TimeStretch), timestamps kept in content time.
+    bool set_speed(double speed, std::string *why) override;
 
     std::string audio_path_text() const;  // "passthrough", "re-encoded to AC-3", "decoded to PCM"
     // How Dolby Vision is played ("Profile 8.1 (configuration record)"), empty when it is not.
@@ -123,7 +127,8 @@ class VlcSource final : public wnk::media::MediaSource {
     bool start_player(std::string *error);
     void stop_player();
     std::string sout_chain() const;
-    void to_packet(Item &item, wnk::media::Packet *out);
+    bool to_packet(Item &item, wnk::media::Packet *out);  // false: nothing to read from this item
+    bool stretch_audio(wnk::media::Packet *p);
 
     libvlc_instance_t *vlc_;
     std::vector<std::string> options_;
@@ -148,6 +153,11 @@ class VlcSource final : public wnk::media::MediaSource {
     bool dovi_convert_ = false;         // Profile 7: strip the enhancement layer, RPUs to 8.1 (reader thread)
     wnk::media::DoviStats dovi_stats_;  // reader thread
     std::string dovi_text_;             // mu_
+    std::atomic<double> speed_{1.0};
+    // Reader thread (select() runs while it is parked): the stretcher and its timeline.
+    std::unique_ptr<wnk::media::TimeStretch> stretch_;
+    int64_t stretch_base_us_ = wnk::media::kNoTime, stretch_in_us_ = wnk::media::kNoTime, stretch_frames_ = 0;
+    std::vector<float> stretch_in_, stretch_out_;
 
     mutable std::mutex mu_;
     std::condition_variable cv_;       // queue has packets / streams arrived / state changed

@@ -11,6 +11,7 @@
 #include "wnk/log.hpp"
 #include "wnk/media/bitstream.hpp"
 #include "wnk/media/dovi.hpp"
+#include "wnk/media/time_stretch.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -296,15 +297,31 @@ bool VlcSource::select(int video_track, int audio_track, const media::BackendCap
     audio_path_ = media::AudioPath::None;
     if (a != nullptr) {
         audio_path_ = media::audio_path(caps, *a);
+        const double speed = speed_.load();
+        if (speed != 1.0) {
+            // Another speed: VLC decodes to stereo PCM, which is time-stretched here (pitch kept).
+            if (!caps.accepts(CodecId::PcmS16)) {
+                if (error) *error = "the TV decoder takes no PCM, which other speeds need";
+                return false;
+            }
+            audio_path_ = media::AudioPath::Pcm;
+        }
         if (audio_path_ == media::AudioPath::None) {
             if (error) *error = "the TV cannot be given audio " + a->codec_label;
             return false;
         }
         pcm_channels_ = caps.pcm_max_channels > 0 ? std::min(std::max(a->channels, 1), caps.pcm_max_channels) : 2;
+        if (speed != 1.0) pcm_channels_ = 2;
         pcm_rate_ = media::pcm_output_rate(a->sample_rate > 0 ? a->sample_rate : 48000, caps.pcm_rates);
         ac3_channels_ = std::min(std::max(a->channels, 1), 6);
     }
-    WNK_LOGI(kCat, "select video %d audio %d (%s)", video_track, audio_track, media::audio_path_name(audio_path_));
+    stretch_.reset();
+    if (a != nullptr && speed_.load() != 1.0)
+        stretch_ = std::make_unique<media::TimeStretch>(2, pcm_rate_, speed_.load());
+    stretch_base_us_ = stretch_in_us_ = kNoTime;
+    stretch_frames_ = 0;
+    WNK_LOGI(kCat, "select video %d audio %d (%s)%s", video_track, audio_track, media::audio_path_name(audio_path_),
+             stretch_ ? (", " + std::to_string(speed_.load()).substr(0, 4) + "x stretched").c_str() : "");
     if (!start_player(error)) return false;
 
     // Wait for the selected streams to be added (their formats come from VLC's packetizers).
@@ -670,14 +687,56 @@ void VlcSource::on_flush(void *opaque, void *id) {
 
 // ---- reading (the controller's reader thread) ----
 
-void VlcSource::to_packet(Item &item, media::Packet *out) {
+bool VlcSource::set_speed(double speed, std::string *why) {
+    if (!(speed >= 0.25 && speed <= 4.0)) {
+        if (why != nullptr) *why = "speed out of range";
+        return false;
+    }
+    speed_.store(speed);
+    return true;
+}
+
+// Stereo S16 PCM through the stretcher. Output is stamped from the first frame after a gap by the
+// frames it gave, times the speed: content time, which the backend divides again (as the kit's
+// FFmpeg source does). False while the stretcher is still filling its first window.
+bool VlcSource::stretch_audio(media::Packet *p) {
+    const int frames = static_cast<int>(p->data.size() / 4);
+    if (frames == 0) return false;
+    const int rate = std::max(1, pcm_rate_);
+    const int64_t dur = static_cast<int64_t>(frames) * 1000000 / rate;
+    if (p->pts_us != kNoTime && (stretch_in_us_ == kNoTime || std::llabs(p->pts_us - stretch_in_us_) > 100000)) {
+        stretch_->reset();
+        stretch_base_us_ = p->pts_us;
+        stretch_frames_ = 0;
+    }
+    if (p->pts_us != kNoTime) stretch_in_us_ = p->pts_us + dur;
+    if (stretch_base_us_ == kNoTime) return false;
+    const auto *s16 = reinterpret_cast<const int16_t *>(p->data.data());
+    stretch_in_.resize(static_cast<size_t>(frames) * 2);
+    for (size_t k = 0; k < stretch_in_.size(); ++k) stretch_in_[k] = s16[k] / 32768.0f;
+    stretch_out_.clear();
+    stretch_->process(stretch_in_.data(), frames, &stretch_out_);
+    const int got = static_cast<int>(stretch_out_.size() / 2);
+    if (got == 0) return false;
+    p->data.resize(static_cast<size_t>(got) * 4);
+    auto *o = reinterpret_cast<int16_t *>(p->data.data());
+    for (size_t k = 0; k < stretch_out_.size(); ++k)
+        o[k] = static_cast<int16_t>(std::lrint(std::clamp(stretch_out_[k], -1.0f, 1.0f) * 32767.0f));
+    const double speed = stretch_->speed();
+    p->pts_us = p->dts_us = stretch_base_us_ + static_cast<int64_t>(std::llround(stretch_frames_ * speed * 1e6 / rate));
+    p->duration_us = static_cast<int64_t>(std::llround(got * speed * 1e6 / rate));
+    stretch_frames_ += got;
+    return true;
+}
+
+bool VlcSource::to_packet(Item &item, media::Packet *out) {
     Stream *s = item.stream;
     *out = {};
     if (item.cue) {
         out->type = media::TrackType::Subtitle;
         out->pts_us = item.pts;
         out->subtitle = std::move(item.cue);
-        return;
+        return true;
     }
     out->type = s->cat == WNK_ES_VIDEO ? media::TrackType::Video : media::TrackType::Audio;
     out->pts_us = item.pts;
@@ -726,6 +785,8 @@ void VlcSource::to_packet(Item &item, media::Packet *out) {
     } else {
         out->data = std::move(item.data);
     }
+    if (stretch_ && s->cat == WNK_ES_AUDIO) return stretch_audio(out);
+    return true;
 }
 
 media::MediaSource::Read VlcSource::read(media::Packet *out, std::string *error) {
@@ -738,8 +799,9 @@ media::MediaSource::Read VlcSource::read(media::Packet *out, std::string *error)
             queued_bytes_ -= std::min(queued_bytes_, item.data.size());
             space_.notify_all();
             lock.unlock();
-            to_packet(item, out);
-            return Read::Packet;
+            if (to_packet(item, out)) return Read::Packet;
+            lock.lock();
+            continue;
         }
         const libvlc_state_t st = mp_ ? libvlc_media_player_get_state(mp_) : libvlc_Error;
         if (st == libvlc_Playing || st == libvlc_Paused) started_ = true;
@@ -946,7 +1008,12 @@ void VlcSource::on_flush(void *, void *) {}
 bool VlcSource::start_player(std::string *) { return false; }
 void VlcSource::stop_player() {}
 std::string VlcSource::sout_chain() const { return {}; }
-void VlcSource::to_packet(Item &, media::Packet *) {}
+bool VlcSource::to_packet(Item &, media::Packet *) { return false; }
+bool VlcSource::set_speed(double, std::string *why) {
+    if (why != nullptr) *why = "this build has no libVLC";
+    return false;
+}
+bool VlcSource::stretch_audio(media::Packet *) { return false; }
 void VlcSource::land_seek_locked(int64_t) {}
 void VlcSource::commit_seek_gop_locked() {}
 libvlc_media_player_t *VlcSource::hold_player() const { return nullptr; }
