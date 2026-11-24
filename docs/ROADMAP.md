@@ -89,7 +89,9 @@ release and date.
 - [x] SMB2/3 in the libVLC build (smb2 module, libsmb2); SMB1/NetBIOS (libdsm) not buildable on glibc 2.12
 - [x] Resume points and "Continue watching" on Home; Settings: decoder, resume. Host-tested only
 - [ ] On the TV: discovery, an SMB share with a password, a DLNA server, an HLS stream
-- [ ] M3U/XSPF playlists, IPTV lists (Playlists tab)
+- [x] Playlists tab: M3U/M3U8 (IPTV groups and logos), PLS, XSPF, local and by address. Host-tested only
+- [x] Music tab: albums from folders with covers, shuffle; cover in the player. Host-tested only
+- [ ] The TV run of docs/TV-TEST-PLAN.md
 - [ ] Media library: posters/thumbnails (`libvlc_media_thumbnail` or snapshots)
 
 ## P4: player feature parity
