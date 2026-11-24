@@ -103,11 +103,13 @@ class MainScreen : public Screen {
         pages_[static_cast<size_t>(Tab::Browse)] = browse_;
         network_ = &stack.add<vplayer::NetworkPage>(s_, nullptr);
         pages_[static_cast<size_t>(Tab::Network)] = network_;
-        pages_[static_cast<size_t>(Tab::Playlists)] = &stack.add<vplayer::PlaylistsPage>(s_);
+        playlists_ = &stack.add<vplayer::PlaylistsPage>(s_);
+        pages_[static_cast<size_t>(Tab::Playlists)] = playlists_;
         for (size_t i = 0; i < pages_.size(); ++i) pages_[i]->set_visible(i == 0);
     }
 
     vplayer::NetworkPage &network() { return *network_; }
+    vplayer::PlaylistsPage &playlists() { return *playlists_; }
 
     // Shows a tab's page (and selects the tab) without moving focus.
     void show(Ui &ui, Tab tab) {
@@ -159,6 +161,7 @@ class MainScreen : public Screen {
     std::array<vplayer::Page *, static_cast<size_t>(Tab::Count)> pages_{};
     vplayer::BrowsePage *browse_ = nullptr;
     vplayer::NetworkPage *network_ = nullptr;
+    vplayer::PlaylistsPage *playlists_ = nullptr;
     std::function<void(Ui &)> open_search_;
     Tab current_ = Tab::Video;
 };
@@ -377,6 +380,11 @@ class App : public wnk::app::Delegate {
         if (auto it = j.find("at"); it != j.end() && it->is_number()) pending_at_ms_ = static_cast<int64_t>(it->get<double>() * 1000);
         // {"decoder": "software" | "hardware"}: force an engine for the next plays (testing).
         if (auto it = j.find("decoder"); it != j.end() && it->is_string()) decoder_ = it->get<std::string>();
+        // {"playlist": "https://…/list.m3u"}: add the list to the Playlists tab and open it (testing).
+        if (auto it = j.find("playlist"); it != j.end() && it->is_string() && main_ != nullptr) {
+            main_->go(ctx.ui(), Tab::Playlists);
+            main_->playlists().add_address(ctx.ui(), "", it->get<std::string>());
+        }
         // {"settings": true}: open Settings (for checking it on a TV without a remote).
         if (auto it = j.find("settings"); it != j.end() && it->is_boolean() && it->get<bool>()) show_settings(ctx.ui());
         // {"panel": "audio" | "subtitles" | "video" | "playback" | "info"}: open the player's panel on

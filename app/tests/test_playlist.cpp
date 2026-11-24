@@ -5,6 +5,11 @@
 
 #include "playlist.hpp"
 
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <cstdio>
 #include <string>
 
 using namespace vplayer;
@@ -117,4 +122,46 @@ TEST("formats_and_resolution") {
     CHECK(parse_playlist("http://a/1\nhttp://a/2\n", "list", &p, &err));
     CHECK_EQ(p.items.size(), size_t{2});
     CHECK(!parse_playlist("just some text", "notes.txt", &p, &err));
+}
+
+// A large IPTV list (iptv-org's index is ~12 000 channels, 2.8 MB) parses and groups quickly.
+TEST("large_iptv_list") {
+    std::string text = "#EXTM3U\n";
+    for (int i = 0; i < 12000; ++i) {
+        text += "#EXTINF:-1 tvg-id=\"Ch" + std::to_string(i) + ".xx\" tvg-logo=\"https://i.imgur.com/logo" +
+                std::to_string(i) + ".png\" group-title=\"Group " + std::to_string(i % 200) + "\",Channel " +
+                std::to_string(i) + " (1080p)\n";
+        text += "https://stream.example/live/" + std::to_string(i) + "/index.m3u8\n";
+    }
+    Playlist p;
+    std::string err;
+    const auto t0 = std::chrono::steady_clock::now();
+    REQUIRE(parse_playlist(text, "https://x/index.m3u", &p, &err));
+    const auto t1 = std::chrono::steady_clock::now();
+    const auto groups = p.groups();
+    const auto t2 = std::chrono::steady_clock::now();
+    const auto ms = [](auto a, auto b) { return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
+    std::printf("parse %lld ms, groups %lld ms\n", static_cast<long long>(ms(t0, t1)), static_cast<long long>(ms(t1, t2)));
+    CHECK(p.items.size() == 12000);
+    CHECK(groups.size() == 200);
+    CHECK(ms(t0, t2) < 2000);
+}
+
+// A real list from disk when VPLAYER_TEST_M3U names one (not in CI): how long it takes.
+TEST("real_list_from_env") {
+    const char *path = std::getenv("VPLAYER_TEST_M3U");
+    if (path == nullptr) return;
+    std::ifstream f(path, std::ios::binary);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    Playlist p;
+    std::string err;
+    const auto t0 = std::chrono::steady_clock::now();
+    const bool ok = parse_playlist(ss.str(), "https://x/index.m3u", &p, &err);
+    const auto t1 = std::chrono::steady_clock::now();
+    const auto groups = p.groups();
+    const auto t2 = std::chrono::steady_clock::now();
+    const auto ms = [](auto a, auto b) { return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
+    std::printf("%s: ok %d, %zu items, %zu groups; parse %lld ms, groups %lld ms\n", path, ok, p.items.size(), groups.size(),
+                static_cast<long long>(ms(t0, t1)), static_cast<long long>(ms(t1, t2)));
 }

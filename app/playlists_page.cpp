@@ -8,6 +8,7 @@
 #include "wnk/ui/navigation.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <sstream>
 
@@ -111,14 +112,18 @@ void PlaylistsPage::set_header(const std::string &crumb2, const std::string &cru
     count_->set_text(count);
 }
 
+void PlaylistsPage::load_saved() {
+    if (saved_loaded_) return;
+    saved_loaded_ = true;
+    wnk::storage::Entry e;
+    auto *store = s_.ctx->store();
+    if (store != nullptr && store->get(kSavedKey, &e) == wnk::storage::Status::Ok) saved_ = saved_playlists_from_json(e.value);
+}
+
 void PlaylistsPage::on_shown(Ui &ui) {
-    if (level_ != Level::Root) return;
-    if (!saved_loaded_) {
-        saved_loaded_ = true;
-        wnk::storage::Entry e;
-        auto *store = s_.ctx->store();
-        if (store != nullptr && store->get(kSavedKey, &e) == wnk::storage::Status::Ok) saved_ = saved_playlists_from_json(e.value);
-    }
+    // A list being opened (or shown) stays: showing the lists would cancel its loading.
+    if (level_ != Level::Root || opening_) return;
+    load_saved();
     show_root(ui, false);
     // Playlist files on the drives (a worker: drives can be slow).
     wnk::async::run_then_post<std::vector<platform::FileEntry>>(
@@ -128,12 +133,14 @@ void PlaylistsPage::on_shown(Ui &ui) {
         },
         [this](std::vector<platform::FileEntry> files) {
             files_ = std::move(files);
-            if (level_ == Level::Root) show_root(s_.ctx->ui(), true);
+            // Not while a list opens: showing the lists would cancel its loading.
+            if (level_ == Level::Root && !opening_) show_root(s_.ctx->ui(), true);
         });
 }
 
 void PlaylistsPage::show_root(Ui &ui, bool focus) {
     loading_.cancel();
+    opening_ = false;
     level_ = Level::Root;
     const bool had = ui.has_focus_within(this);
     const size_t at = had ? grid_->focused_index() : 0;
@@ -177,6 +184,8 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
     loading_ = wnk::async::CancellationSource();
     list_name_ = name;
     list_location_ = location;
+    opening_ = true;
+    WNK_LOGI(kCat, "open list %s", location.c_str());
     set_header(name, "", "Loading…");
     auto http = s_.ctx->http();
     wnk::async::run_then_post<Loaded>(
@@ -195,7 +204,11 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
                 req.url = location;
                 req.max_response_bytes = kMaxListBytes;
                 req.timeout_ms = 30000;
+                const auto t0 = std::chrono::steady_clock::now();
                 const auto resp = http->perform(req, cancel);
+                WNK_LOGI(kCat, "fetched %s: status %d, %zu bytes, %lld ms", location.c_str(), resp.status, resp.body.size(),
+                         static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                    std::chrono::steady_clock::now() - t0).count()));
                 if (!resp.ok()) {
                     r.error = resp.error != wnk::net::NetError::None ? std::string("network: ") + wnk::net::error_name(resp.error)
                                                                     : "the server answered " + std::to_string(resp.status);
@@ -211,7 +224,9 @@ void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string
 }
 
 void PlaylistsPage::show_list(Ui &ui, Playlist list, const std::string &error) {
+    opening_ = false;
     if (!error.empty()) {
+        WNK_LOGW(kCat, "%s: %s", list_location_.c_str(), error.c_str());
         ui.toast("Cannot open " + list_name_ + ": " + error, 5000);
         show_root(ui, true);
         return;
@@ -381,6 +396,17 @@ void PlaylistsPage::save_lists() {
     });
 }
 
+void PlaylistsPage::add_address(Ui &ui, const std::string &label, const std::string &address) {
+    load_saved();  // before adding to them (they load when the page is first shown)
+    const std::string name = label.empty() ? mrl_display_name(address) : label;
+    saved_.erase(std::remove_if(saved_.begin(), saved_.end(), [&](const SavedPlaylist &l) { return l.url == address; }),
+                 saved_.end());
+    saved_.push_back({name, address});
+    save_lists();
+    show_root(ui, true);
+    open_list(ui, name, address);
+}
+
 void PlaylistsPage::open_address_dialog(Ui &ui) {
     auto d = std::make_unique<Dialog>("Add a playlist or IPTV list",
                                       "The list's address (M3U, M3U8, PLS or XSPF). It stays here for next time.");
@@ -392,13 +418,7 @@ void PlaylistsPage::open_address_dialog(Ui &ui) {
             u.toast("That does not look like an address (it needs a scheme, like http://).");
             return;
         }
-        const std::string name = label.text().empty() ? mrl_display_name(address) : label.text();
-        saved_.erase(std::remove_if(saved_.begin(), saved_.end(), [&](const SavedPlaylist &l) { return l.url == address; }),
-                     saved_.end());
-        saved_.push_back({name, address});
-        save_lists();
-        show_root(u, true);
-        open_list(u, name, address);
+        add_address(u, label.text(), address);
     });
     d->add_button("Cancel");
     ui.show_dialog(std::move(d));

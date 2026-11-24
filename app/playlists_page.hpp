@@ -27,6 +27,8 @@ class PlaylistsPage : public Page {
     void on_shown(wnk::ui::Ui &ui) override;
     bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
     void open_address_dialog(wnk::ui::Ui &ui);
+    // Keeps `address` among the lists (named `name`, or after the address) and opens it.
+    void add_address(wnk::ui::Ui &ui, const std::string &name, const std::string &address);
 
  private:
     enum class Level : uint8_t { Root, Groups, Entries };
@@ -42,6 +44,7 @@ class PlaylistsPage : public Page {
     void show_entries(wnk::ui::Ui &ui, const std::string &group);
     void activate(wnk::ui::Ui &ui, size_t i);
     void save_lists();
+    void load_saved();
     void set_header(const std::string &crumb2, const std::string &crumb3, const std::string &count);
 
     Services &s_;
@@ -49,6 +52,7 @@ class PlaylistsPage : public Page {
     wnk::async::CancellationSource loading_;
     std::vector<SavedPlaylist> saved_;
     bool saved_loaded_ = false;
+    bool opening_ = false;  // a list is loading (open_list until show_list)
     std::vector<wnk::platform::FileEntry> files_;  // playlists on the drives
     std::vector<RootItem> root_;
     Level level_ = Level::Root;
