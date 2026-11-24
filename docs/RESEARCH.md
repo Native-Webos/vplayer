@@ -263,3 +263,13 @@ Driven with `app/tools/tv-keys.sh` (real remote events), on H.264 + AAC/AC-3 MKV
   the 4K TrueHD test file, which turned out to be a Profile 7 dual layer without a record: Starfish
   reports `"hdrType":"DolbyVision"`, the TV shows its Dolby Vision badge, 0 frames dropped, 0 RPUs
   dropped in conversion. Files with a record were tested on the host only (synthetic MKV/MP4).
+
+## 15. Speed and chapters on the hardware path (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
+
+- Speed: at another speed VlcSource has VLC's `#transcode` decode the audio to stereo S16 and stretches
+  it with the kit's TimeStretch (WSOLA, pitch kept), stamping the output in content time as the kit's
+  FFmpeg source does; the controller reloads the decoder at that speed. 1.5x on 25 fps H.264: 187
+  frames shown per 5 s (37.4 fps), 0 dropped. The controller refuses speeds that would feed more than
+  60 fps (3x and 4x of 25 fps); the player then says so and shows the speed actually playing.
+- Chapters: libVLC's player reads them (Matroska, MP4, DVD...) even when it only demuxes for the
+  bridge. Choosing one goes through the controller's seek (the keyframe at or before its start).

@@ -75,7 +75,7 @@ release and date.
 - [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
 - [ ] DVB and teletext subtitles on the hardware path
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
-- [ ] Speed on the hardware path: time-stretched audio from VLC (tempo filter in `#transcode`)
+- [x] Speed on the hardware path: VLC decodes audio to PCM, the app time-stretches it (RESEARCH.md §15)
 - [x] Chapters on the hardware path: listed from libVLC, chosen through the controller's seek; on the TV 2026-11-24
 - [x] Dolby Vision declared to Starfish (RESEARCH.md §14): configuration record from MKV/MP4, or RPUs in
       the first keyframe; Profile 7 fed as 8.1. On the TV 2026-11-24
