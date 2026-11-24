@@ -731,6 +731,7 @@ void PlayerScreen::apply_session() {
 void PlayerScreen::apply_speed() {
     // The choice carries over to the next file; this one may not be able to follow it.
     const bool fixed = playback_ && !playback_->can_change_rate();
+    speed_settle_s_ = 1.5f;  // the engine may take a moment, or refuse
     if (playback_ && !fixed) playback_->set_rate(kSpeeds[settings_.speed]);
     speed_btn_->set_text(fixed ? "1×" : kSpeedNames[static_cast<size_t>(settings_.speed)]);
 }
@@ -1015,10 +1016,24 @@ void PlayerScreen::update(Ui &ui, float dt) {
         format_->set_visible(true);
     }
 
-    // Twice a second: chapter name, chapter marks, "Ends at".
+    // Twice a second: chapter name, chapter marks, "Ends at", the speed actually playing (an engine
+    // may refuse one: the TV decoder above 60 fps of video).
     clock_s_ += dt;
+    speed_settle_s_ -= dt;
     if (clock_s_ >= 0.5f) {
         clock_s_ = 0;
+        if (playback_->can_change_rate() && applied_ && speed_settle_s_ <= 0) {
+            const float r = playback_->rate();
+            size_t best = 0;
+            for (size_t i = 1; i < std::size(kSpeeds); ++i)
+                if (std::abs(kSpeeds[i] - r) < std::abs(kSpeeds[best] - r)) best = i;
+            if (static_cast<int>(best) != settings_.speed) {
+                ui.toast(std::string(kSpeedNames[static_cast<size_t>(settings_.speed)]) + " is too fast for this video here; playing at " +
+                         kSpeedNames[best] + ".");
+                settings_.speed = static_cast<int>(best);
+            }
+            speed_btn_->set_text(kSpeedNames[best]);
+        }
         const auto chapters = playback_->chapters();
         const int c = playback_->chapter();
         chapter_->set_text(c >= 0 && c < static_cast<int>(chapters.size())
@@ -1028,7 +1043,7 @@ void PlayerScreen::update(Ui &ui, float dt) {
         if (len > 0)
             for (const auto &ch : chapters) seek_->marks.push_back(static_cast<float>(ch.start_ms) / len);
         if (len > 0) {
-            const float rate = playback_->can_change_rate() ? std::max(0.1f, kSpeeds[settings_.speed]) : 1.0f;
+            const float rate = playback_->can_change_rate() ? std::max(0.1f, kSpeeds[settings_.speed]) : 1.0f;  // settled above
             const std::time_t end = std::time(nullptr) + static_cast<std::time_t>((len - t) / 1000 / rate);
             char buf[32];
             std::strftime(buf, sizeof buf, "Ends at %H:%M", std::localtime(&end));

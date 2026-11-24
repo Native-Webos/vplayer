@@ -136,6 +136,7 @@ class PlayerScreen : public wnk::ui::Screen {
     float idle_s_ = 0;
     float overlay_alpha_ = 1, overlay_target_ = 1;
     float clock_s_ = 0;
+    float speed_settle_s_ = 0;  // after a speed change, before checking what the engine plays
     bool controls_ = true;
     bool closing_ = false;
     bool applied_ = false;     // apply_session ran for this file
