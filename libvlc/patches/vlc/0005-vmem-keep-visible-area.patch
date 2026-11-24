@@ -1,0 +1,46 @@
+diff --git a/modules/video_output/vmem.c b/modules/video_output/vmem.c
+index a046d7c..54ae276 100644
+--- a/modules/video_output/vmem.c
++++ b/modules/video_output/vmem.c
+@@ -138,6 +138,7 @@ static int Open(vlc_object_t *object)
+     /* Define the video format */
+     video_format_t fmt;
+     video_format_ApplyRotation(&fmt, &vd->fmt);
++    bool keep_visible = false;
+ 
+     if (setup != NULL) {
+         char chroma[5];
+@@ -147,6 +148,7 @@ static int Open(vlc_object_t *object)
+         memset(sys->pitches, 0, sizeof(sys->pitches));
+         memset(sys->lines, 0, sizeof(sys->lines));
+ 
++        const unsigned source_width = fmt.i_width, source_height = fmt.i_height;
+         if (setup(&sys->opaque, chroma, &fmt.i_width, &fmt.i_height,
+                            sys->pitches, sys->lines) == 0) {
+             msg_Err(vd, "video format setup failure (no pictures)");
+@@ -154,6 +156,10 @@ static int Open(vlc_object_t *object)
+             return VLC_EGENERIC;
+         }
+         fmt.i_chroma = vlc_fourcc_GetCodecFromString(VIDEO_ES, chroma);
++        /* The application took the decoder's buffer size: keep the decoder's visible area (a
++         * 1080-line picture in a 1090-line buffer), so no scaler is inserted to stretch it to the
++         * whole buffer; the application crops. */
++        keep_visible = fmt.i_width == source_width && fmt.i_height == source_height;
+ 
+     } else {
+         char *chroma = var_InheritString(vd, "vmem-chroma");
+@@ -171,9 +177,11 @@ static int Open(vlc_object_t *object)
+         }
+         sys->cleanup = NULL;
+     }
+-    fmt.i_x_offset = fmt.i_y_offset = 0;
+-    fmt.i_visible_width = fmt.i_width;
+-    fmt.i_visible_height = fmt.i_height;
++    if (!keep_visible) {
++        fmt.i_x_offset = fmt.i_y_offset = 0;
++        fmt.i_visible_width = fmt.i_width;
++        fmt.i_visible_height = fmt.i_height;
++    }
+ 
+     if (!fmt.i_chroma) {
+         msg_Err(vd, "vmem-chroma should be 4 characters long");

@@ -42,11 +42,11 @@ release and date.
 - [x] Remote-key paths verified on the TV (pause, seek, panels) with `app/tools/tv-keys.sh`
 - [x] Subtitles on the TV: a sidecar `.srt` is found and drawn by VLC in Inter (`--freetype-font`
       set to the app's font; VLC's default font file does not exist on webOS)
-- [ ] **Software path drops frames in the app** (see RESEARCH.md §10): even MPEG-4 ASP 720p, which
-      decodes at 4× real time in the CLI, shows 80–500 "picture is too late" per 12 s at 110–170% CPU
-      of 400%. Not audio (same with `:no-audio`), not a CPU quota (no cgroup limit), not redraw rate,
-      not thread count. Next: profile the vout thread (timestamps in lock/display callbacks), try
-      `:no-drop-late-frames`, compare with the CLI using `--vout=vmem`
+- [x] **Software path drops frames in the app** (RESEARCH.md §10, found 2026-11-25): VLC 3's vmem
+      resets the display's visible area to the whole buffer, so a 1080-line picture in H.264's
+      1090-line buffer made VLC insert swscale on every picture (~90 ms at 1080p on the TV). Patch
+      0005 keeps the decoder's visible area; 1080p25 H.264 went from ~40 % of pictures shown to all
+      of them (0 lost). Other sizes still to check: MPEG-4 ASP 720p, the phone recording
 - [x] Screens: URL entry (Network → Open a network stream; Home → Open a stream)
 
 ## P2: hardware path (the reason this port is worth doing)
@@ -121,7 +121,7 @@ release and date.
 - [ ] DVD/Blu-ray ISO and folders with menus (software path)
 - [ ] Video on the TV decoder path: deinterlace, adjust (the TV decodes: VLC never sees the picture)
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)
-- [ ] Sleep timer, repeat/shuffle, bookmarks, snapshot
+- [x] Sleep timer, repeat (file, folder), bookmarks, snapshot (shuffle: Music)
 
 ## P5: release
 - [ ] Final name and icon (not "VLC", see RESEARCH.md §6)

@@ -388,8 +388,11 @@ class VlcPlayback final : public Playback {
         if (m != nullptr) libvlc_media_release(m);
         const int handed = displayed_.exchange(0);
         const int64_t gap = max_gap_us_.exchange(0);
-        WNK_LOGI(kCat, "vlc: 5 s: %d pictures handed over (longest gap %lld ms); VLC: %d shown, %d lost, %d decoded",
-                 handed, static_cast<long long>(gap / 1000), have ? st.i_displayed_pictures - last_shown_ : -1,
+        const int64_t held = held_us_.exchange(0), held_max = held_max_us_.exchange(0);
+        WNK_LOGI(kCat, "vlc: 5 s: %d pictures handed over (longest gap %lld ms; buffer held %.1f ms avg, %.1f max); "
+                 "VLC: %d shown, %d lost, %d decoded",
+                 handed, static_cast<long long>(gap / 1000), handed > 0 ? held / 1000.0 / handed : 0.0, held_max / 1000.0,
+                 have ? st.i_displayed_pictures - last_shown_ : -1,
                  have ? st.i_lost_pictures - last_lost_ : -1, have ? st.i_decoded_video : -1);
         if (have) {
             last_shown_ = st.i_displayed_pictures;
@@ -423,6 +426,8 @@ class VlcPlayback final : public Playback {
         uint8_t *p[3];
         const int b = self->sink_->begin_write(p);
         for (int i = 0; i < 3; ++i) planes[i] = p[i];
+        self->locked_us_.store(std::chrono::duration_cast<std::chrono::microseconds>(
+                                   std::chrono::steady_clock::now().time_since_epoch()).count());
         return reinterpret_cast<void *>(static_cast<intptr_t>(b));
     }
     static void unlock_cb(void *, void *, void *const *) {}
@@ -432,6 +437,11 @@ class VlcPlayback final : public Playback {
         // For the 5-second report: pictures handed over and the longest gap between two.
         const int64_t now = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::steady_clock::now().time_since_epoch()).count();
+        // How long VLC held the buffer (from lock: its copy, conversion and blending into it).
+        const int64_t held = now - self->locked_us_.load();
+        self->held_us_.fetch_add(held);
+        int64_t hm = self->held_max_us_.load();
+        while (held > hm && !self->held_max_us_.compare_exchange_weak(hm, held)) {}
         const int64_t last = self->last_display_us_.exchange(now);
         if (last > 0) {
             int64_t gap = now - last, prev = self->max_gap_us_.load();
@@ -446,6 +456,7 @@ class VlcPlayback final : public Playback {
     // Frame-drop diagnosis (RESEARCH.md §10): display callbacks counted on VLC's thread, reported
     // with libVLC's own statistics every 5 seconds while playing.
     std::atomic<int64_t> last_display_us_{0}, max_gap_us_{0};
+    std::atomic<int64_t> locked_us_{0}, held_us_{0}, held_max_us_{0};
     std::atomic<int> displayed_{0};
     std::chrono::steady_clock::time_point next_report_{};
     int last_lost_ = 0, last_shown_ = 0;

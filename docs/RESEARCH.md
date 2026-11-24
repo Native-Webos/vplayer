@@ -178,6 +178,24 @@ What it took to cross-build VLC 3.0.24 with the webosbrew NDK. Each one is now h
 - Debug hook: launch parameter `{"play": "<path>", "vlcOptions": [":option", ...]}` passes per-media
   options to libVLC.
 
+### 10.1 Root cause of the lost pictures (2026-11-25)
+
+Measured on the TV with `two-audio.mkv` (1080p25 H.264) on the software path: VLC showed ~50 pictures
+per 5 s and lost ~72 ("picture is too late", 29/42/55/69 ms in a repeating ~93 ms cycle), at 160 %
+CPU of 400 %. Ruled out on the TV, each changing nothing: `:avcodec-skiploopfilter=4` (decoding),
+`:no-audio` (the clock), `:avcodec-threads=6`. The app's callbacks were cheap (VLC held the vmem
+buffer 1.7 ms per picture).
+
+VLC's debug log showed it: `A filter to adapt decoder I420 to display I420 is needed`. H.264 1080p
+decodes into a 1920×1090 buffer with a 1920×1080 visible area; vmem (modules/video_output/vmem.c)
+resets the display format's visible area to the whole buffer after the setup callback, so
+`video_format_IsSimilar` fails and the vout inserts a converter: swscale stretching 1080 lines to
+1090 on every picture, about 90 ms each on the TV's CPU.
+
+Patch 0005 (libvlc/patches/vlc) keeps the decoder's visible area when the setup callback keeps its
+buffer size (the app crops to the track's size already). Result: 125 pictures per 5 s, 0 lost,
+the converter line gone, the picture cropped correctly.
+
 ## 11. Hardware path through libVLC (OLED65C1PTB, webOS 6.5.3, 2026-11-24) [dev]
 
 - VLC's `smem` stream output passes compressed video, but not the codec setup, DTS, keyframe flags or
