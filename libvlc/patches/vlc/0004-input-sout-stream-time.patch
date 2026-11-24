@@ -1,0 +1,58 @@
+diff --git a/src/input/decoder.c b/src/input/decoder.c
+index 69488a6..850f8f8 100644
+--- a/src/input/decoder.c
++++ b/src/input/decoder.c
+@@ -77,6 +77,7 @@ struct decoder_owner_sys_t
+ 
+     sout_instance_t         *p_sout;
+     sout_packetizer_input_t *p_sout_input;
++    bool                     b_sout_stream_time; /* "sout-stream-time": no clock conversion */
+ 
+     vlc_thread_t     thread;
+ 
+@@ -846,8 +847,9 @@ static int DecoderPlaySout( decoder_t *p_dec, block_t *p_sout_block )
+     }
+ 
+     DecoderWaitUnblock( p_dec );
+-    DecoderFixTs( p_dec, &p_sout_block->i_dts, &p_sout_block->i_pts,
+-                  &p_sout_block->i_length, NULL, INT64_MAX );
++    if( !p_owner->b_sout_stream_time )
++        DecoderFixTs( p_dec, &p_sout_block->i_dts, &p_sout_block->i_pts,
++                      &p_sout_block->i_length, NULL, INT64_MAX );
+ 
+     vlc_mutex_unlock( &p_owner->lock );
+ 
+@@ -1685,6 +1687,7 @@ static decoder_t * CreateDecoder( vlc_object_t *p_parent,
+     p_owner->i_spu_order = 0;
+     p_owner->p_sout = p_sout;
+     p_owner->p_sout_input = NULL;
++    p_owner->b_sout_stream_time = p_sout != NULL && var_InheritBool( p_dec, "sout-stream-time" );
+     p_owner->p_packetizer = NULL;
+ 
+     p_owner->b_fmt_description = false;
+diff --git a/src/libvlc-module.c b/src/libvlc-module.c
+index 5634252..3e97386 100644
+--- a/src/libvlc-module.c
++++ b/src/libvlc-module.c
+@@ -936,6 +936,12 @@ static const char *const ppsz_prefres[] = {
+ #define SOUT_ALL_LONGTEXT N_( \
+     "Stream all elementary streams (video, audio and subtitles)")
+ 
++#define SOUT_STREAM_TIME_TEXT N_("Stream timestamps")
++#define SOUT_STREAM_TIME_LONGTEXT N_( \
++    "Give the stream output the media's own timestamps instead of converting " \
++    "them to the playback clock (for outputs that hand streams to a decoder " \
++    "with its own clock).")
++
+ #define SOUT_DISPLAY_TEXT N_("Display while streaming")
+ #define SOUT_DISPLAY_LONGTEXT N_( \
+     "Play locally the stream while streaming it.")
+@@ -1974,6 +1980,8 @@ vlc_module_begin ()
+                                 SOUT_VIDEO_LONGTEXT, true )
+     add_bool( "sout-spu", 1, SOUT_SPU_TEXT,
+                                 SOUT_SPU_LONGTEXT, true )
++    add_bool( "sout-stream-time", false, SOUT_STREAM_TIME_TEXT,
++                                SOUT_STREAM_TIME_LONGTEXT, true )
+     add_integer( "sout-mux-caching", 1500, SOUT_MUX_CACHING_TEXT,
+                                 SOUT_MUX_CACHING_LONGTEXT, true )
+ 
