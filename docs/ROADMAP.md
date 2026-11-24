@@ -72,7 +72,8 @@ release and date.
 - [x] Text subtitles on the hardware path (RESEARCH.md §12): SubRip, ASS/SSA (styled by libass), MP4
       timed text and WebVTT from VLC's subtitle streams, files beside the media, the panel's track
       choice and delay; within a frame of the picture. On the TV 2026-11-24
-- [ ] Bitmap subtitles on the hardware path (PGS, DVD, DVB): decode in the module or the app
+- [x] PGS and DVD subtitles on the hardware path, decoded by the app; on the TV 2026-11-24
+- [ ] DVB and teletext subtitles on the hardware path
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
 - [ ] Speed on the hardware path: time-stretched audio from VLC (tempo filter in `#transcode`)
 - [ ] Chapters on the hardware path

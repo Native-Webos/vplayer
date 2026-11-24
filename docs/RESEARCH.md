@@ -214,8 +214,12 @@ What it took to cross-build VLC 3.0.24 with the webosbrew NDK. Each one is now h
 - ASS/SSA tracks are drawn by the kit's libass renderer from the script header (positions, colours,
   styles as authored); other text is laid out by the kit's subtitle view. SubRip's `{\an8}` is not
   honoured there (VLC's own renderer puts it at the top).
-- Bitmap formats (PGS, DVD, DVB) still reach the bridge but are not drawn: VLC 3 would have to decode
-  them in the module (its SPU decoders produce subpicture regions), or the app decodes them itself.
+- Bitmap formats: the app decodes PGS (`bdpg`: PCS/PDS/ODS/END display sets, palettes and objects
+  kept per epoch, empty compositions clear) and DVD subpictures (`spu `: 2-bit RLE in two fields,
+  coloured through the palette the bridge passes since ABI 2) itself (`app/player/subtitle_bitmap.cpp`),
+  and the kit's subtitle view scales them from their canvas. DVB and teletext are not decoded yet.
+  A DVD stop dated 0xFFFF (ffmpeg writes it) means "until the next subpicture"; VLC's own renderer
+  keeps such pictures for the full 745 s and stacks them, the app does not.
 - The rooted TV accepts input events written to `/dev/input/event1` (the IR remote): `app/tools/tv-keys.sh`
   presses remote keys, which the app cannot tell from the real remote (Back is code 412).
 
