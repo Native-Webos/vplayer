@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ui/theme.hpp"
 
+#include "wnk/log.hpp"
+
 #include "wnk/render/renderer.hpp"
 
 #include <algorithm>
@@ -208,6 +210,11 @@ Tile::Tile(const TileSpec &spec) : Column(12), title_(spec.title), subtitle_(spe
         }
     }
     if (!spec.badge.empty()) chips->add<Chip>(spec.badge).set_align(Align::Start, Align::Start);
+    if (spec.on_menu) {
+        auto &more = chips->add<IconButton>(icon("more"), "Options", spec.on_menu, 44);
+        more.set_background(Color::hex(0x101014D0), 22);
+        more.set_align(Align::End, Align::Start);
+    }
     if (!spec.corner.empty()) chips->add<Chip>(spec.corner).set_align(Align::End, Align::End);
 
     auto &text = add<Column>(4);
@@ -271,6 +278,39 @@ bool HeroCard::on_action(Ui &ui, const input::ActionEvent &e) {
         ClickHandler h = on_click_;
         h(ui);
     }
+    return true;
+}
+
+bool MenuGrid::on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) {
+    using wnk::input::Action;
+    using wnk::input::Phase;
+    if (e.action != Action::Confirm || !on_menu || !has_menu) {
+        if (e.action != Action::Confirm) held_ = -1;  // focus moves on: no hold
+        return CollectionView::on_action(ui, e);
+    }
+    const size_t index = focused_index();
+    if (!has_menu(index) || !ui.has_focus_within(this)) {
+        held_ = -1;
+        return CollectionView::on_action(ui, e);
+    }
+    if (e.phase == Phase::Press) {
+        held_ = static_cast<long>(index);
+        held_since_ = std::chrono::steady_clock::now();
+        fired_ = false;
+        return true;
+    }
+    if (e.phase == Phase::Repeat) {  // the key repeats while held: the hold is timed here
+        if (held_ == static_cast<long>(index) && !fired_ &&
+            std::chrono::steady_clock::now() - held_since_ >= std::chrono::milliseconds(600)) {
+            fired_ = true;
+            on_menu(ui, index);
+        }
+        return true;
+    }
+    // Release: a short press opens the item; after a hold the options are open already.
+    const bool open = held_ == static_cast<long>(index) && !fired_;
+    held_ = -1;
+    if (open && on_activate) on_activate(ui, index);
     return true;
 }
 

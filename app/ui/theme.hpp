@@ -6,9 +6,11 @@
 #pragma once
 
 #include "wnk/render/color.hpp"
+#include "wnk/ui/collection.hpp"
 #include "wnk/ui/ui.hpp"
 #include "wnk/ui/widgets.hpp"
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -99,6 +101,28 @@ struct TileSpec {
     Color tint = col::surface;
     std::string badge;         // top left, e.g. "MKV"
     std::string corner;        // bottom right, e.g. "4.2 GB"
+    // Options for this item (edit, delete): a "⋮" button at the top right, for the pointer; on a
+    // MenuGrid, holding OK on the tile opens them too.
+    wnk::ui::ClickHandler on_menu;
+};
+
+// A grid whose items may have options: on those, OK opens the item when it is released, and holding
+// it (0.6 s) opens the options instead (has_menu says which items have them). Pointer clicks are a
+// quick press and release, so they open the item; the tile's "⋮" button takes the pointer's clicks for
+// the options.
+class MenuGrid : public wnk::ui::CollectionView {
+ public:
+    using CollectionView::CollectionView;
+    std::function<bool(size_t)> has_menu;
+    std::function<void(wnk::ui::Ui &, size_t)> on_menu;
+
+ protected:
+    bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
+
+ private:
+    long held_ = -1;  // the item OK went down on, while it is held
+    std::chrono::steady_clock::time_point held_since_{};
+    bool fired_ = false;  // the options opened for this hold
 };
 
 // A focusable media tile for grids and rails. Focus lifts it slightly and rings the thumbnail.

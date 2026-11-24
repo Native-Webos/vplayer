@@ -71,7 +71,9 @@ PlaylistsPage::PlaylistsPage(Services &services) : s_(services) {
 
     auto &body = col.add<View>();
     body.set_height(Dim::fill());
-    grid_ = &body.add<CollectionView>(Axis::Vertical, 5, Size{metric::tile_w, metric::tile_h}, metric::tile_gap);
+    grid_ = &body.add<ui::MenuGrid>(Axis::Vertical, 5, Size{metric::tile_w, metric::tile_h}, metric::tile_gap);
+    grid_->has_menu = [this](size_t i) { return has_menu(i); };
+    grid_->on_menu = [this](Ui &u, size_t i) { item_menu(u, i); };
     grid_->set_content_padding(Insets{12, 20, 12, 12});
     grid_->name = "playlists.grid";
     grid_->on_activate = [this](Ui &ui, size_t i) { activate(ui, i); };
@@ -148,21 +150,19 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
     root_.clear();
     root_.push_back({RootItem::Kind::Add, "Add a playlist or IPTV list", ""});
     const bool manageable = (s_.my_playlists != nullptr && !s_.my_playlists->empty()) || !saved_.empty();
-    if (manageable) root_.push_back({RootItem::Kind::Manage, "Manage lists", ""});
     if (s_.my_playlists != nullptr)
         for (const auto &l : *s_.my_playlists) root_.push_back({RootItem::Kind::Mine, l.name, ""});
     for (const auto &l : saved_) root_.push_back({RootItem::Kind::Saved, l.name.empty() ? mrl_display_name(l.url) : l.name, l.url});
     for (const auto &f : files_) root_.push_back({RootItem::Kind::File, display_name(f.name), f.path});
-    const size_t lists = root_.size() - (manageable ? 2 : 1);
+    const size_t lists = root_.size() - 1;
     set_header("", "", std::to_string(lists) + (lists == 1 ? " list" : " lists"));
     grid_->set_items(root_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
         const RootItem &r = root_[i];
         TileSpec t;
         t.title = r.name;
-        t.icon_url = ui::icon(r.kind == RootItem::Kind::Add ? "link" : r.kind == RootItem::Kind::Manage ? "trash" : "playlist");
-        if (r.kind == RootItem::Kind::Manage) {
-            t.subtitle = "Delete your playlists, forget added lists";
-        } else if (r.kind == RootItem::Kind::Add) {
+        t.icon_url = ui::icon(r.kind == RootItem::Kind::Add ? "link" : "playlist");
+        if (has_menu(i)) t.on_menu = [this, i](Ui &u) { item_menu(u, i); };
+        if (r.kind == RootItem::Kind::Add) {
             t.subtitle = "M3U, M3U8, PLS or XSPF address";
             t.tint = ui::Color::hex(0x3A2410FF);
         } else if (r.kind == RootItem::Kind::Mine) {
@@ -180,7 +180,7 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
         return std::make_unique<Tile>(t);
     });
     message_->set_visible(false);
-    hint_->set_text(manageable ? "To delete or forget a list: Manage lists (or Red on it)." : "");
+    hint_->set_text(manageable ? "Hold OK on a list for its options (rename, edit, delete), or click its three dots." : "");
     if ((focus && had) || focus) grid_->focus_index(ui, std::min(at, root_.size() - 1));
 }
 
@@ -282,15 +282,10 @@ void PlaylistsPage::show_entries(Ui &ui, const std::string &group) {
         if (i.group == group || groups_.size() <= 1) shown_.push_back(&i);
     set_header(list_name_, groups_.size() > 1 ? (group.empty() ? "Other" : group) : "",
                std::to_string(shown_.size()) + (shown_.size() == 1 ? " entry" : " entries"));
-    grid_->set_items(shown_.size() + entries_lead(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
+    grid_->set_items(shown_.size(), [this](Ui &, size_t i) -> std::unique_ptr<View> {
         TileSpec t;
-        if (i < entries_lead()) {
-            t.title = "Remove entries";
-            t.subtitle = "From this playlist";
-            t.icon_url = ui::icon("trash");
-            return std::make_unique<Tile>(t);
-        }
-        const PlaylistItem &it = *shown_[i - entries_lead()];
+        if (has_menu(i)) t.on_menu = [this, i](Ui &u) { item_menu(u, i); };
+        const PlaylistItem &it = *shown_[i];
         t.title = it.title;
         const platform::FileKind k = platform::file_kind(it.location);
         if (!it.logo.empty()) t.logo_url = it.logo; else t.icon_url = ui::icon(k == platform::FileKind::Audio ? "music" : "film");
@@ -300,8 +295,9 @@ void PlaylistsPage::show_entries(Ui &ui, const std::string &group) {
         if (!d.empty()) t.corner = d;
         return std::make_unique<Tile>(t);
     });
-    hint_->set_text(groups_.size() > 1 ? "Back: the groups" : "Back: the lists");
-    grid_->focus_index(ui, shown_.empty() ? 0 : entries_lead());  // the first entry, past "Remove entries"
+    hint_->set_text(mine_ >= 0 ? "Hold OK on an entry to remove it, or click its three dots. Back: the lists"
+                               : groups_.size() > 1 ? "Back: the groups" : "Back: the lists");
+    grid_->focus_index(ui, 0);
 }
 
 void PlaylistsPage::activate(Ui &ui, size_t i) {
@@ -311,8 +307,6 @@ void PlaylistsPage::activate(Ui &ui, size_t i) {
             const RootItem r = root_[i];
             if (r.kind == RootItem::Kind::Add) {
                 open_address_dialog(ui);
-            } else if (r.kind == RootItem::Kind::Manage) {
-                manage_lists(ui);
             } else if (r.kind == RootItem::Kind::Mine) {
                 for (size_t k = 0; k < s_.my_playlists->size(); ++k) {
                     if ((*s_.my_playlists)[k].name != r.name) continue;
@@ -332,11 +326,6 @@ void PlaylistsPage::activate(Ui &ui, size_t i) {
             if (i < groups_.size()) show_entries(ui, groups_[i]);
             return;
         case Level::Entries: {
-            if (i < entries_lead()) {
-                remove_entries_dialog(ui);
-                return;
-            }
-            i -= entries_lead();
             if (i >= shown_.size()) return;
             std::vector<platform::FileEntry> queue;
             for (const auto *it : shown_) {
@@ -354,20 +343,9 @@ void PlaylistsPage::activate(Ui &ui, size_t i) {
 }
 
 bool PlaylistsPage::on_action(Ui &ui, const input::ActionEvent &e) {
-    // Red: what the Manage tiles do, on the focused item (each asks first).
-    if (e.action == input::Action::Red && level_ == Level::Entries && mine_ >= 0 &&
-        mine_ < static_cast<int>(s_.my_playlists->size())) {
-        if (e.phase != input::Phase::Press) return true;
-        const size_t f = grid_->focused_index();
-        if (f >= entries_lead() && f - entries_lead() < shown_.size())
-            confirm_remove_entry(ui, shown_[f - entries_lead()]->location, shown_[f - entries_lead()]->title);
-        return true;
-    }
-    if (e.action == input::Action::Red && level_ == Level::Root) {
-        if (e.phase != input::Phase::Press) return true;
-        const size_t i = grid_->focused_index();
-        if (i < root_.size() && root_[i].kind == RootItem::Kind::Mine) confirm_delete_mine(ui, root_[i].name);
-        if (i < root_.size() && root_[i].kind == RootItem::Kind::Saved) confirm_forget_saved(ui, root_[i].location, root_[i].name);
+    // Red: the focused item's options (as its "⋮").
+    if (e.action == input::Action::Red && (level_ == Level::Root || level_ == Level::Entries)) {
+        if (e.phase == input::Phase::Press && has_menu(grid_->focused_index())) item_menu(ui, grid_->focused_index());
         return true;
     }
     if (e.action != input::Action::Back || level_ == Level::Root) return Page::on_action(ui, e);
@@ -418,16 +396,81 @@ void PlaylistsPage::open_address_dialog(Ui &ui) {
     ui.focus(&url);
 }
 
-void PlaylistsPage::manage_lists(Ui &ui) {
-    auto d = std::make_unique<Dialog>("Manage lists", "Choose a list to delete it (yours) or forget it (added by address).");
-    if (s_.my_playlists != nullptr)
-        for (const auto &l : *s_.my_playlists)
-            d->add_button(l.name + " · your playlist", [this, name = l.name](Ui &u) { confirm_delete_mine(u, name); });
-    for (const auto &l : saved_) {
-        const std::string name = l.name.empty() ? mrl_display_name(l.url) : l.name;
-        d->add_button(name + " · added by address", [this, url = l.url, name](Ui &u) { confirm_forget_saved(u, url, name); });
+bool PlaylistsPage::has_menu(size_t i) const {
+    if (level_ == Level::Root)
+        return i < root_.size() && (root_[i].kind == RootItem::Kind::Mine || root_[i].kind == RootItem::Kind::Saved);
+    return level_ == Level::Entries && mine_ >= 0 && i < shown_.size();
+}
+
+void PlaylistsPage::item_menu(Ui &ui, size_t i) {
+    if (!has_menu(i)) return;
+    if (level_ == Level::Entries) {
+        const PlaylistItem *it = shown_[i];
+        auto d = std::make_unique<Dialog>(it->title, "In " + list_name_);
+        d->add_button("Remove from this playlist",
+                      [this, loc = it->location, title = it->title](Ui &u) { confirm_remove_entry(u, loc, title); });
+        d->add_button("Cancel");
+        ui.show_dialog(std::move(d));
+        return;
     }
-    d->add_button("Close");
+    const RootItem r = root_[i];
+    const bool mine = r.kind == RootItem::Kind::Mine;
+    auto d = std::make_unique<Dialog>(r.name, mine ? "Your playlist" : loggable(r.location));
+    if (mine) {
+        d->add_button("Rename", [this, name = r.name](Ui &u) { rename_mine(u, name); });
+        d->add_button("Delete", [this, name = r.name](Ui &u) { confirm_delete_mine(u, name); });
+    } else {
+        d->add_button("Edit", [this, url = r.location, name = r.name](Ui &u) { edit_saved(u, url, name); });
+        d->add_button("Remove", [this, url = r.location, name = r.name](Ui &u) { confirm_forget_saved(u, url, name); });
+    }
+    d->add_button("Cancel");
+    ui.show_dialog(std::move(d));
+}
+
+void PlaylistsPage::rename_mine(Ui &ui, const std::string &name) {
+    auto d = std::make_unique<Dialog>("Rename " + name);
+    auto &field = d->body().add<TextField>("Name");
+    field.set_text(name);
+    d->add_button("Save", [this, name, &field](Ui &u) {
+        const std::string to = field.text();
+        if (to.empty() || to == name) return;
+        for (const auto &l : *s_.my_playlists)
+            if (l.name == to) {
+                u.toast("You have a playlist called " + to + " already.");
+                return;
+            }
+        for (auto &l : *s_.my_playlists)
+            if (l.name == name) l.name = to;
+        if (s_.save_my_playlists) s_.save_my_playlists();
+        u.toast("Renamed to " + to);
+        show_root(u, true);
+    });
+    d->add_button("Cancel");
+    ui.show_dialog(std::move(d));
+}
+
+void PlaylistsPage::edit_saved(Ui &ui, const std::string &url, const std::string &name) {
+    auto d = std::make_unique<Dialog>("Edit " + name, "Its name, and its address (M3U, M3U8, PLS or XSPF).");
+    auto &label = d->body().add<TextField>("Name");
+    label.set_text(name);
+    auto &address = d->body().add<TextField>("Address");
+    address.set_text(url);
+    d->add_button("Save", [this, url, &label, &address](Ui &u) {
+        const std::string to = address.text();
+        if (!looks_like_url(to)) {
+            u.toast("That does not look like an address (it needs a scheme, like http://).");
+            return;
+        }
+        for (auto &l : saved_)
+            if (l.url == url) {
+                l.url = to;
+                l.name = label.text().empty() ? mrl_display_name(to) : label.text();
+            }
+        save_lists();
+        u.toast("Saved");
+        show_root(u, true);
+    });
+    d->add_button("Cancel");
     ui.show_dialog(std::move(d));
 }
 
@@ -445,8 +488,8 @@ void PlaylistsPage::confirm_delete_mine(Ui &ui, const std::string &name) {
 }
 
 void PlaylistsPage::confirm_forget_saved(Ui &ui, const std::string &url, const std::string &name) {
-    auto d = std::make_unique<Dialog>("Forget " + name + "?", "The list's address (" + loggable(url) + ") leaves this tab.");
-    d->add_button("Forget", [this, url, name](Ui &u) {
+    auto d = std::make_unique<Dialog>("Remove " + name + "?", "The list's address (" + loggable(url) + ") leaves this tab.");
+    d->add_button("Remove", [this, url, name](Ui &u) {
         saved_.erase(std::remove_if(saved_.begin(), saved_.end(), [&](const SavedPlaylist &l) { return l.url == url; }),
                      saved_.end());
         save_lists();
@@ -454,17 +497,6 @@ void PlaylistsPage::confirm_forget_saved(Ui &ui, const std::string &url, const s
         show_root(u, true);
     });
     d->add_button("Cancel");
-    ui.show_dialog(std::move(d));
-}
-
-void PlaylistsPage::remove_entries_dialog(Ui &ui) {
-    auto d = std::make_unique<Dialog>("Remove entries", "Choose an entry to remove it from " + list_name_ + ".");
-    size_t n = 0;
-    for (const auto *it : shown_) {
-        if (++n > 30) break;  // a dialog of buttons; Red on an entry reaches the rest
-        d->add_button(it->title, [this, loc = it->location, title = it->title](Ui &u) { confirm_remove_entry(u, loc, title); });
-    }
-    d->add_button("Close");
     ui.show_dialog(std::move(d));
 }
 

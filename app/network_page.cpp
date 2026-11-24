@@ -93,7 +93,11 @@ NetworkPage::NetworkPage(Services &services, libvlc_instance_t *vlc)
 
     auto &body = col.add<View>();
     body.set_height(Dim::fill());
-    grid_ = &body.add<CollectionView>(Axis::Vertical, 5, Size{metric::tile_w, metric::tile_h}, metric::tile_gap);
+    grid_ = &body.add<ui::MenuGrid>(Axis::Vertical, 5, Size{metric::tile_w, metric::tile_h}, metric::tile_gap);
+    grid_->has_menu = [this](size_t i) {
+        return folder_.empty() && i < root_.size() && (root_[i].what == Item::Saved || root_[i].what == Item::Recent);
+    };
+    grid_->on_menu = [this](Ui &u, size_t i) { item_menu(u, i); };
     grid_->set_content_padding(Insets{12, 20, 12, 12});
     grid_->name = "network.grid";
     grid_->on_activate = [this](Ui &ui, size_t i) { activate(ui, i); };
@@ -178,7 +182,6 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
     root_.clear();
     root_.push_back({Item::OpenUrl, {}});
     root_.push_back({Item::AddServer, {}});
-    if (!places_.servers.empty() || !places_.urls.empty()) root_.push_back({Item::Manage, {}});
     for (const auto &s : places_.servers) root_.push_back({Item::Saved, s});
     for (const auto &s : found_) {
         const bool saved = std::any_of(places_.servers.begin(), places_.servers.end(),
@@ -204,13 +207,6 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
                 t.subtitle = "SMB, NFS, FTP, SFTP or WebDAV by address";
                 t.icon_url = ui::icon("server");
                 break;
-            case Item::Manage: {
-                const size_t n = places_.servers.size() + places_.urls.size();
-                t.title = "Manage saved";
-                t.subtitle = std::to_string(n) + (n == 1 ? " server or address · remove" : " servers and addresses · remove");
-                t.icon_url = ui::icon("trash");
-                break;
-            }
             case Item::Saved:
             case Item::Found: t = entry_tile(r.entry); break;
             case Item::Recent:
@@ -219,12 +215,13 @@ void NetworkPage::show_root(Ui &ui, bool keep_focus) {
                 t.icon_url = ui::icon("link");
                 break;
         }
+        if (r.what == Item::Saved || r.what == Item::Recent) t.on_menu = [this, i](Ui &u) { item_menu(u, i); };
         return std::make_unique<Tile>(t);
     });
     message_->set_visible(false);
     const char *remove = places_.servers.empty() && places_.urls.empty()
                              ? ""
-                             : "To remove a saved server or address: Manage saved, or Red on it.";
+                             : "Hold OK on a saved server for its options (edit, remove), or click its three dots.";
     hint_->set_text(found_.empty() ? std::string("Looking for media servers on this network… ") + remove : std::string(remove));
     if ((keep_focus && had_focus) || want_focus_) {
         want_focus_ = false;
@@ -283,7 +280,6 @@ void NetworkPage::activate(Ui &ui, size_t i) {
         switch (r.what) {
             case Item::OpenUrl: ask_url(ui); break;
             case Item::AddServer: ask_server(ui); break;
-            case Item::Manage: manage_saved(ui); break;
             case Item::Saved:
             case Item::Found: open(ui, r.entry, r.entry.mrl); break;
             case Item::Recent: play_url(ui, r.entry.mrl); break;
@@ -339,15 +335,45 @@ void NetworkPage::forget(Ui &ui, size_t i) {
     if (r.what == Item::Saved || r.what == Item::Recent) confirm_remove(ui, r.what == Item::Saved, r.entry);
 }
 
-void NetworkPage::manage_saved(Ui &ui) {
-    auto d = std::make_unique<Dialog>("Saved servers and addresses", "Choose one to remove it from this list.");
-    for (const auto &s : places_.servers)
-        d->add_button(s.name + " · " + mrl_protocol(s.mrl), [this, s](Ui &u) { confirm_remove(u, true, s); });
-    for (const auto &url : places_.urls) {
-        const NetEntry e{mrl_display_name(url), url, NetEntry::Kind::Media, {}, {}};
-        d->add_button(e.name + " · address", [this, e](Ui &u) { confirm_remove(u, false, e); });
-    }
-    d->add_button("Close");
+void NetworkPage::item_menu(Ui &ui, size_t i) {
+    if (!folder_.empty() || i >= root_.size()) return;
+    const RootItem r = root_[i];
+    const bool server = r.what == Item::Saved;
+    if (!server && r.what != Item::Recent) return;
+    auto d = std::make_unique<Dialog>(server ? r.entry.name : mrl_display_name(r.entry.mrl), loggable(r.entry.mrl));
+    if (server) d->add_button("Edit", [this, e = r.entry](Ui &u) { edit_server(u, e); });
+    d->add_button("Remove", [this, server, e = r.entry](Ui &u) { confirm_remove(u, server, e); });
+    d->add_button("Cancel");
+    ui.show_dialog(std::move(d));
+}
+
+void NetworkPage::edit_server(Ui &ui, const NetEntry &entry) {
+    auto d = std::make_unique<Dialog>("Edit " + entry.name, "Its name, and its address (smb://, nfs://, ftp://, sftp://...).");
+    auto &label = d->body().add<TextField>("Name");
+    label.set_text(entry.name);
+    auto &address = d->body().add<TextField>("Address");
+    address.set_text(entry.mrl);
+    d->add_button("Save", [this, old = entry.mrl, &label, &address](Ui &u) {
+        std::string mrl = address.text();
+        while (!mrl.empty() && mrl.back() == ' ') mrl.pop_back();
+        if (!looks_like_url(mrl)) {
+            u.toast("That does not look like an address (it needs a scheme, like smb://).");
+            return;
+        }
+        if (mrl.back() != '/') mrl += '/';
+        for (auto &s : places_.servers) {
+            if (s.mrl != old) continue;
+            s.mrl = mrl;
+            s.name = label.text().empty() ? mrl_display_name(mrl) : label.text();
+            s.detail = mrl_protocol(mrl) + " · saved";
+        }
+        save_places();
+        WNK_LOGI(kCat, "edited server %s", loggable(mrl).c_str());
+        u.toast("Saved");
+        want_focus_ = true;
+        show_root(u, true);
+    });
+    d->add_button("Cancel");
     ui.show_dialog(std::move(d));
 }
 
