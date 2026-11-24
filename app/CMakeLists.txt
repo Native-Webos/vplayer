@@ -17,7 +17,7 @@ endif ()
 # set(WNK_FFMPEG ON)  # media playback: see the kit's docs/AGENT-APP-GUIDE.md, "Media playback"
 include("${_kit}/cmake/WnkApp.cmake")
 
-add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp music.cpp music_page.cpp search.cpp thumbnails.cpp
+add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cpp network.cpp network_page.cpp vlc_dialogs.cpp history.cpp app_settings.cpp playlist.cpp playlists_page.cpp music.cpp music_page.cpp search.cpp thumbnails.cpp opensubtitles.cpp
         player/frame_sink.cpp player/vlc_playback.cpp player/vlc_vars.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp
@@ -132,6 +132,11 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_settings SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")
     target_link_libraries(test_settings PRIVATE wnk_app wnk_media)
     add_test(NAME unit.vplayer.settings COMMAND test_settings)
+    add_executable(test_opensubtitles tests/test_opensubtitles.cpp opensubtitles.cpp)
+    target_include_directories(test_opensubtitles PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_include_directories(test_opensubtitles SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")
+    target_link_libraries(test_opensubtitles PRIVATE wnk_app wnk_media)
+    add_test(NAME unit.vplayer.opensubtitles COMMAND test_opensubtitles)
     add_executable(test_thumbnails tests/test_thumbnails.cpp thumbnails.cpp)
     target_include_directories(test_thumbnails PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_thumbnails PRIVATE wnk_media wnk_platform wnk_async)
