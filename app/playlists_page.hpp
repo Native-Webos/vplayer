@@ -33,7 +33,7 @@ class PlaylistsPage : public Page {
  private:
     enum class Level : uint8_t { Root, Groups, Entries };
     struct RootItem {
-        enum class Kind : uint8_t { Add, Mine, Saved, File } kind;
+        enum class Kind : uint8_t { Add, Manage, Mine, Saved, File } kind;
         std::string name, location;
     };
 
@@ -45,6 +45,14 @@ class PlaylistsPage : public Page {
     void activate(wnk::ui::Ui &ui, size_t i);
     void save_lists();
     void load_saved();
+    // Without colour keys (the Magic Remote has none): a "Manage lists" tile, and a "Remove entries"
+    // tile in the viewer's own playlists; each removal asks first. Red does the same on the focused one.
+    void manage_lists(wnk::ui::Ui &ui);
+    void confirm_delete_mine(wnk::ui::Ui &ui, const std::string &name);
+    void confirm_forget_saved(wnk::ui::Ui &ui, const std::string &url, const std::string &name);
+    void remove_entries_dialog(wnk::ui::Ui &ui);
+    void confirm_remove_entry(wnk::ui::Ui &ui, const std::string &location, const std::string &title);
+    size_t entries_lead() const { return mine_ >= 0 ? 1 : 0; }  // the "Remove entries" tile
     void set_header(const std::string &crumb2, const std::string &crumb3, const std::string &count);
 
     Services &s_;
