@@ -209,11 +209,25 @@ std::string subrip_ass_header(float scale, bool box, bool yellow) {
            "MarginL, MarginR, MarginV, Encoding\n"
            "Style: Default,Inter," + std::to_string(size) + (yellow ? ",&H0000FFFF" : ",&H00FFFFFF") + ",&H000000FF," + (box ? back : std::string("&H00000000")) +
            "," + back + ",-1,0,0,0,100,100,0,0," + border + ",2,96,96,76,1\n\n"
-           "[Events]\nFormat: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+           // The standard event format: libass maps Matroska-style packets ("ReadOrder, Layer, Style,
+           // ...") onto it, skipping its first three names (Layer, Start, End).
+           "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
 }
 
+namespace {
+// SubRip's HTML-style tags that libass draws (italic, bold, underline, strike-through, colour).
+bool has_style_tags(const std::string &text) {
+    std::string low = text;
+    for (auto &ch : low) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    for (const char *t : {"<i>", "<b>", "<u>", "<s>", "<font"})
+        if (low.find(t) != std::string::npos) return true;
+    return false;
+}
+}  // namespace
+
 std::string subrip_ass_event(const std::string &text, bool always) {
-    if (!always && text.find("{\\") == std::string::npos) return {};  // nothing libass would place differently
+    // Plain lines stay plain text; placed ({\an8}) or styled (<i>, <font color>) ones go to libass.
+    if (!always && text.find("{\\") == std::string::npos && !has_style_tags(text)) return {};
     std::string out;
     for (size_t i = 0; i < text.size(); ++i) {
         const char c = text[i];

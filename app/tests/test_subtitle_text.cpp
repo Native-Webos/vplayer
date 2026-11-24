@@ -5,6 +5,8 @@
 
 #include "player/subtitle_text.hpp"
 
+#include "wnk/media/ass_renderer.hpp"
+
 #include <string>
 #include <vector>
 
@@ -64,7 +66,11 @@ TEST("subrip_placement_to_ass") {
     CHECK_EQ(c->text, std::string("Top and orange\nline"));
     REQUIRE(c->ass_events.size() == 1);
     CHECK_EQ(c->ass_events[0], std::string("0,0,Default,,0,0,0,,{\\an8}{\\i1}Top{\\i0} and {\\c&H0080FF&}orange{\\c}\\Nline"));
-    CHECK(cue("subt", "<i>no tags</i>")->ass_events.empty());
+    // Italic alone goes to libass too (the plain-text view has no italics); untagged lines do not.
+    const auto italic = cue("subt", "<i>italic</i>");
+    REQUIRE(italic->ass_events.size() == 1);
+    CHECK_EQ(italic->ass_events[0], std::string("0,0,Default,,0,0,0,,{\\i1}italic{\\i0}"));
+    CHECK(cue("subt", "plain line")->ass_events.empty());
     CHECK(subrip_ass_header().find("Style: Default,Inter") != std::string::npos);
 }
 
@@ -153,4 +159,54 @@ TEST("webvtt_boxes") {
 TEST("unknown_codec_and_time") {
     CHECK(cue("pgs ", "x") == nullptr);
     CHECK(text_subtitle_cue(fourcc("subt"), reinterpret_cast<const uint8_t *>("a"), 1, nullptr, 0, kNoTime, 0) == nullptr);
+}
+
+// A placed SubRip line through libass as on the TV: the header's style (size, position) applies.
+TEST("subrip_placed_line_rendered") {
+    if (!wnk::media::AssRenderer::available()) return;
+    std::string err;
+    auto r = wnk::media::AssRenderer::create(VPLAYER_TEST_FONT, &err);
+    REQUIRE(r != nullptr);
+    REQUIRE(r->set_track(subrip_ass_header()));
+    wnk::media::SubtitleCue cue;
+    cue.start_us = 0;
+    cue.end_us = 5'000'000;
+    cue.ass_events.push_back(subrip_ass_event("{\\an8}Top line"));
+    r->add_events(cue);
+    std::vector<wnk::media::AssRenderer::Region> regions;
+    bool changed = false;
+    REQUIRE(r->render(1'000'000, 1920, 1080, 1920, 1080, &regions, &changed));
+    REQUIRE(!regions.empty());
+    int top = 1080, bottom = 0;
+    for (const auto &g : regions) top = std::min(top, g.y), bottom = std::max(bottom, g.y + g.height);
+    std::printf("placed line: y %d..%d\n", top, bottom);
+    CHECK(bottom - top >= 40);  // the header's 59 px Inter, not libass's 18 px default
+    CHECK(bottom < 300);        // at the top
+}
+
+// The header's style reaches the events (yellow here; libass's own default style is white): the
+// [Events] Format line must be the standard one, which libass maps Matroska packets onto.
+TEST("subrip_style_applies") {
+    if (!wnk::media::AssRenderer::available()) return;
+    std::string err;
+    auto r = wnk::media::AssRenderer::create(VPLAYER_TEST_FONT, &err);
+    REQUIRE(r != nullptr);
+    REQUIRE(r->set_track(subrip_ass_header(0.055f, false, true)));
+    wnk::media::SubtitleCue cue;
+    cue.start_us = 0;
+    cue.end_us = 5'000'000;
+    cue.ass_events.push_back(subrip_ass_event("{\\an8}HHHH"));
+    r->add_events(cue);
+    std::vector<wnk::media::AssRenderer::Region> regions;
+    bool changed = false;
+    REQUIRE(r->render(1'000'000, 1920, 1080, 1920, 1080, &regions, &changed));
+    int yellow = 0, white = 0;
+    for (const auto &g : regions)
+        for (size_t i = 0; i + 3 < g.rgba.size(); i += 4) {
+            if (g.rgba[i + 3] < 250) continue;
+            if (g.rgba[i] > 200 && g.rgba[i + 1] > 200 && g.rgba[i + 2] < 80) ++yellow;
+            if (g.rgba[i] > 200 && g.rgba[i + 1] > 200 && g.rgba[i + 2] > 200) ++white;
+        }
+    std::printf("yellow %d white %d\n", yellow, white);
+    CHECK(yellow > white);
 }
