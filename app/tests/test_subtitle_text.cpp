@@ -65,11 +65,11 @@ TEST("subrip_placement_to_ass") {
     REQUIRE(c != nullptr);
     CHECK_EQ(c->text, std::string("Top and orange\nline"));
     REQUIRE(c->ass_events.size() == 1);
-    CHECK_EQ(c->ass_events[0], std::string("0,0,Default,,0,0,0,,{\\an8}{\\i1}Top{\\i0} and {\\c&H0080FF&}orange{\\c}\\Nline"));
+    CHECK_EQ(c->ass_events[0], std::string("10000,0,Default,,0,0,0,,{\\an8}{\\i1}Top{\\i0} and {\\c&H0080FF&}orange{\\c}\\Nline"));
     // Italic alone goes to libass too (the plain-text view has no italics); untagged lines do not.
     const auto italic = cue("subt", "<i>italic</i>");
     REQUIRE(italic->ass_events.size() == 1);
-    CHECK_EQ(italic->ass_events[0], std::string("0,0,Default,,0,0,0,,{\\i1}italic{\\i0}"));
+    CHECK_EQ(italic->ass_events[0], std::string("10000,0,Default,,0,0,0,,{\\i1}italic{\\i0}"));
     CHECK(cue("subt", "plain line")->ass_events.empty());
     CHECK(subrip_ass_header().find("Style: Default,Inter") != std::string::npos);
 }
@@ -209,4 +209,33 @@ TEST("subrip_style_applies") {
         }
     std::printf("yellow %d white %d\n", yellow, white);
     CHECK(yellow > white);
+}
+
+// Consecutive SubRip cues both reach libass (each its own ReadOrder: libass drops repeats).
+TEST("subrip_consecutive_cues_rendered") {
+    if (!wnk::media::AssRenderer::available()) return;
+    std::string err;
+    auto r = wnk::media::AssRenderer::create(VPLAYER_TEST_FONT, &err);
+    REQUIRE(r != nullptr);
+    REQUIRE(r->set_track(subrip_ass_header()));
+    const std::string a = "<i>first</i>", b = "{\\an8}second";
+    const auto ca = text_subtitle_cue(fourcc("subt"), reinterpret_cast<const uint8_t *>(a.data()), a.size(), nullptr, 2,
+                                      1'000'000, 4'000'000);
+    const auto cb = text_subtitle_cue(fourcc("subt"), reinterpret_cast<const uint8_t *>(b.data()), b.size(), nullptr, 2,
+                                      6'000'000, 6'000'000);
+    REQUIRE(ca && cb);
+    r->add_events(*ca);
+    r->add_events(*cb);
+    std::vector<wnk::media::AssRenderer::Region> regions;
+    bool changed = false;
+    REQUIRE(r->render(2'000'000, 1920, 1080, 1920, 1080, &regions, &changed));
+    CHECK(!regions.empty());
+    REQUIRE(r->render(8'000'000, 1920, 1080, 1920, 1080, &regions, &changed));
+    CHECK(!regions.empty());
+}
+
+// The bottom margin follows the control bar (subrip_ass_header's margin).
+TEST("subrip_header_margin") {
+    CHECK(subrip_ass_header(0.055f, false, false, 0.07f).find(",96,96,76,1") != std::string::npos);
+    CHECK(subrip_ass_header(0.055f, false, false, 0.28f).find(",96,96,302,1") != std::string::npos);
 }

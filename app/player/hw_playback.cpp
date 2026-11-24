@@ -234,7 +234,8 @@ class HwPlayback final : public Playback {
         const int track = controller_->subtitle_track();
         const std::string header = source_->ass_header(track);
         // SubRip: libass draws its placed lines ({\an8}) with a style like the plain text's.
-        if (header.empty() && source_->subtitle_codec(track) == "subt") return subrip_ass_header(look_scale_, look_box_, look_yellow_);
+        if (header.empty() && source_->subtitle_codec(track) == "subt")
+            return subrip_ass_header(look_scale_, look_box_, look_yellow_, lift_);
         return header;
     }
     bool set_picture_area(int mode, float zoom) override {
@@ -248,6 +249,12 @@ class HwPlayback final : public Playback {
         look_box_ = box;
         look_yellow_ = yellow;
         if (controller_) source_->set_subrip_all_ass(yellow);  // the plain-text view draws white only
+    }
+    bool set_subtitle_lift(float fraction) override {
+        if (fraction == lift_) return false;
+        lift_ = fraction;
+        return controller_ && source_->subtitle_codec(controller_->subtitle_track()) == "subt" &&
+               source_->ass_header(controller_->subtitle_track()).empty();
     }
     std::pair<int, int> video_size() const override {
         if (!controller_) return {0, 0};
@@ -342,7 +349,8 @@ class HwPlayback final : public Playback {
     int64_t subtitle_delay_us_ = 0;
     int chosen_ = -1;  // the chapter last chosen (set_chapter)
     AudioEffects effects_;  // what this file was opened with
-    bool cc_selected_ = false;  // closed captions shown (from the video, not a libVLC track)
+    bool cc_selected_ = false;
+    float lift_ = 0.07f;  // SubRip lines' bottom margin (set_subtitle_lift)  // closed captions shown (from the video, not a libVLC track)
     int area_mode_ = 0;  // AspectMode: Fit
     float area_zoom_ = 1;
     float look_scale_ = 0.055f;

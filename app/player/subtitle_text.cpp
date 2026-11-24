@@ -197,7 +197,7 @@ std::string subrip_plain_text(const std::string &text) {
     return tidy_lines(media::webvtt_plain_text(tidy_lines(no_overrides)));
 }
 
-std::string subrip_ass_header(float scale, bool box, bool yellow) {
+std::string subrip_ass_header(float scale, bool box, bool yellow, float margin) {
     // As the plain-text style looks: Inter, white with a black outline (or on a dark box), bottom
     // centre, `scale` of the picture's height, 7 % margin.
     const int size = static_cast<int>(1080 * scale + 0.5f);
@@ -208,7 +208,7 @@ std::string subrip_ass_header(float scale, bool box, bool yellow) {
            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
            "MarginL, MarginR, MarginV, Encoding\n"
            "Style: Default,Inter," + std::to_string(size) + (yellow ? ",&H0000FFFF" : ",&H00FFFFFF") + ",&H000000FF," + (box ? back : std::string("&H00000000")) +
-           "," + back + ",-1,0,0,0,100,100,0,0," + border + ",2,96,96,76,1\n\n"
+           "," + back + ",-1,0,0,0,100,100,0,0," + border + ",2,96,96," + std::to_string(static_cast<int>(1080 * margin + 0.5f)) + ",1\n\n"
            // The standard event format: libass maps Matroska-style packets ("ReadOrder, Layer, Style,
            // ...") onto it, skipping its first three names (Layer, Start, End).
            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
@@ -225,7 +225,7 @@ bool has_style_tags(const std::string &text) {
 }
 }  // namespace
 
-std::string subrip_ass_event(const std::string &text, bool always) {
+std::string subrip_ass_event(const std::string &text, bool always, int read_order) {
     // Plain lines stay plain text; placed ({\an8}) or styled (<i>, <font color>) ones go to libass.
     if (!always && text.find("{\\") == std::string::npos && !has_style_tags(text)) return {};
     std::string out;
@@ -262,7 +262,7 @@ std::string subrip_ass_event(const std::string &text, bool always) {
         out += c;
     }
     while (!out.empty() && (out.back() == ' ' || out.back() == '\n')) out.pop_back();
-    return "0,0,Default,,0,0,0,," + out;
+    return std::to_string(read_order) + ",0,Default,,0,0,0,," + out;
 }
 
 std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const uint8_t *data, size_t size,
@@ -281,7 +281,8 @@ std::shared_ptr<const media::SubtitleCue> text_subtitle_cue(uint32_t f, const ui
         const std::string text = subtitle_utf8(raw, encoding);
         cue->text = subrip_plain_text(text);
         // Placed or styled lines ({\an8}...) are drawn by libass with subrip_ass_header().
-        const std::string event = subrip_ass_event(text, subrip_all_ass);
+        // libass drops a packet whose ReadOrder it has seen: each cue its own (its start in ms).
+        const std::string event = subrip_ass_event(text, subrip_all_ass, static_cast<int>(start_us / 1000));
         if (!event.empty()) cue->ass_events.push_back(event);
     } else if (f == kSsa) {
         const std::string event = subtitle_utf8(raw, encoding);

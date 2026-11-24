@@ -41,9 +41,11 @@ std::shared_ptr<const wnk::media::SubtitleCue> text_subtitle_cue(uint32_t vlc_fo
 // an ASS event, drawn by libass with this script header (styled as the plain text is); lines
 // without tags stay plain text. Empty when the line has no override tag.
 // `yellow`: the text colour (Settings), else white.
-std::string subrip_ass_header(float scale = 0.055f, bool box = false, bool yellow = false);
-// `always`: also lines without tags (to draw every line in the header's colour).
-std::string subrip_ass_event(const std::string &utf8_text, bool always = false);
+// `margin`: the bottom margin, a fraction of the height (larger while the control bar shows).
+std::string subrip_ass_header(float scale = 0.055f, bool box = false, bool yellow = false, float margin = 0.07f);
+// `always`: also lines without tags (to draw every line in the header's colour). `read_order`: unique
+// per event of a track (libass drops a packet whose ReadOrder it has seen).
+std::string subrip_ass_event(const std::string &utf8_text, bool always = false, int read_order = 0);
 
 // Helpers, exposed for tests.
 std::string subtitle_utf8(const std::string &text, const char *encoding);  // valid UTF-8 out

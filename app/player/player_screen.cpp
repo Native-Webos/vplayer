@@ -1026,7 +1026,10 @@ void PlayerScreen::refresh_bar() { apply_speed(); }
 void PlayerScreen::update_subtitles(float dt) {
     // Above the control bar while it shows (not for the side panel), near the bottom otherwise.
     const bool bar = overlay_->visible() && overlay_alpha_ > 0.5f;
-    subs_->set_bottom_margin(bar ? 0.28f : 0.07f);  // the bar's top is about 26 % up
+    const float lift = bar ? 0.28f : 0.07f;  // the bar's top is about 26 % up
+    subs_->set_bottom_margin(lift);
+    // SubRip lines drawn by libass take the margin from their header: made again with it.
+    if (playback_->set_subtitle_lift(lift)) subs_track_ = -2;
 
     // The picture's rectangle on screen (the TV fits it into the whole screen), so subtitles sit on
     // the picture and styled ASS scales with it.

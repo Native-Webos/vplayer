@@ -171,6 +171,12 @@ class Playback {
         (void)box;
         (void)yellow;
     }
+    // The bottom margin of subtitles whose look the app makes (SubRip through libass), a fraction of
+    // the height. True when subtitle_ass_header() changes with it (styled ASS keeps its own margins).
+    virtual bool set_subtitle_lift(float fraction) {
+        (void)fraction;
+        return false;
+    }
 
     // ---- timing ----
     virtual void set_audio_delay_ms(int64_t) {}
