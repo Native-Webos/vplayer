@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Runs ON the TV (Python 2.7, root): presses remote keys by writing Linux input events to the IR
 # remote's event device, so the app sees them exactly like the real remote. Testing only.
-#   python tv-keys.py KEY [KEY...]     KEY: a Linux key code, or sleep:<seconds>
+#   python tv-keys.py KEY [KEY...]     KEY: a Linux key code, sleep:<seconds>, or hold:<code>:<seconds>
 # tools/tv-keys.sh pushes this file and turns key names into codes.
 import struct
 import sys
@@ -21,6 +21,21 @@ def main():
     for arg in sys.argv[1:]:
         if arg.startswith("sleep:"):
             time.sleep(float(arg[6:]))
+            continue
+        if arg.startswith("hold:"):  # held down, with the kernel's autorepeat events
+            _, code, secs = arg.split(":")
+            code = int(code)
+            event(1, code, 1)
+            event(0, 0, 0)
+            end = time.time() + float(secs)
+            time.sleep(0.4)
+            while time.time() < end:
+                event(1, code, 2)  # EV_KEY repeat
+                event(0, 0, 0)
+                time.sleep(0.1)
+            event(1, code, 0)
+            event(0, 0, 0)
+            time.sleep(0.35)
             continue
         code = int(arg)
         event(1, code, 1)  # EV_KEY down

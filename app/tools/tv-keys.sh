@@ -6,6 +6,7 @@
 # KEY: up down left right ok back play pause playpause stop ff rew red green yellow blue,
 #      a Linux key code, or sleep:<seconds>.
 # Example: tools/tv-keys.sh ok sleep:2 right right   (pause, then skip twice)
+#          tools/tv-keys.sh hold-ok:1                  (OK held for a second)
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 dev="${ARES_DEVICE:-tv}"
@@ -20,6 +21,7 @@ for k in "$@"; do
         ff) codes+=(208) ;; rew) codes+=(168) ;;
         red) codes+=(398) ;; green) codes+=(399) ;; yellow) codes+=(400) ;; blue) codes+=(401) ;;
         sleep:*|[0-9]*) codes+=("$k") ;;
+        hold-ok:*) codes+=("hold:28:${k#hold-ok:}") ;;
         *) echo "unknown key: $k" >&2; exit 2 ;;
     esac
 done
