@@ -848,8 +848,10 @@ void PlayerScreen::start(Ui &ui) {
     if (queue_.size() > 1) sub += " · " + std::to_string(index_ + 1) + " of " + std::to_string(queue_.size());
     subtitle_->set_text(sub);
     format_->set_visible(false);
-    settings_.audio_delay_ms = settings_.subtitle_delay_ms = 0;
-    settings_.a_ms = settings_.b_ms = -1;
+    if (!reopen_) {  // a new file: no delays, no A-B (a reopened one keeps them)
+        settings_.audio_delay_ms = settings_.subtitle_delay_ms = 0;
+        settings_.a_ms = settings_.b_ms = -1;
+    }
     ended_ = false;
     history_s_ = 0;
     // A resume point (not for the launch parameter "at", which is set already).
@@ -935,15 +937,26 @@ void PlayerScreen::apply_session() {
     video_->set_aspect(settings_.aspect);
     video_->set_zoom(settings_.zoom / 100.0f);
     playback_->set_picture_area(static_cast<int>(settings_.aspect), settings_.zoom / 100.0f);
+    if (reopen_) {  // the same file again: the viewer's tracks and delays
+        const Reopen r = *reopen_;
+        reopen_.reset();
+        if (r.audio_track >= 0 && r.audio_track != playback_->audio_track()) playback_->set_audio_track(r.audio_track);
+        if (r.subtitle_track != playback_->subtitle_track()) playback_->set_subtitle_track(r.subtitle_track);
+        if (r.audio_delay_ms != 0) playback_->set_audio_delay_ms(r.audio_delay_ms);
+        if (r.subtitle_delay_ms != 0) playback_->set_subtitle_delay_ms(r.subtitle_delay_ms);
+    }
 }
 
 void PlayerScreen::apply_effects(Ui &ui) {
     if (!playback_ || playback_->apply_audio_effects(settings_.effects())) return;
     // The engine takes them at open: the same file again, from here.
     start_at_ms_ = playback_->time_ms();
+    reopen_ = Reopen{playback_->audio_track(), playback_->subtitle_track(), settings_.audio_delay_ms,
+                     settings_.subtitle_delay_ms};
     ui.toast("Applying the audio effects…");
     stop_current();
     start(ui);
+    if (!playback_) reopen_.reset();
 }
 
 void PlayerScreen::apply_speed() {
@@ -961,6 +974,7 @@ void PlayerScreen::go_to(Ui &ui, int delta) {
         return;
     }
     stop_current();
+    reopen_.reset();
     index_ = static_cast<size_t>(target);
     software_ = false;
     start(ui);

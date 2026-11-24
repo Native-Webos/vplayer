@@ -28,6 +28,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -159,6 +160,13 @@ class PlayerScreen : public wnk::ui::Screen {
     bool controls_ = true;
     bool closing_ = false;
     bool applied_ = false;     // apply_session ran for this file
+    // The same file opened again (new audio effects): what the viewer had chosen, restored once the
+    // tracks exist.
+    struct Reopen {
+        int audio_track = -1, subtitle_track = -1;
+        int audio_delay_ms = 0, subtitle_delay_ms = 0;
+    };
+    std::optional<Reopen> reopen_;
     bool software_ = false;    // this file fell back to the software path
     bool reported_ = false;
     int pending_panel_ = -1;
