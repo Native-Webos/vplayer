@@ -2,6 +2,7 @@
 #include "player/vlc_source.hpp"
 
 #include "player/dovi_detect.hpp"
+#include "player/mkv_attachments.hpp"
 #include "player/subtitle_bitmap.hpp"
 #include "player/subtitle_text.hpp"
 #include "vlc_engine.hpp"
@@ -178,6 +179,11 @@ std::string VlcSource::dovi_text() const {
     return dovi_text_;
 }
 
+std::vector<media::FontAttachment> VlcSource::fonts() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return fonts_;
+}
+
 std::string VlcSource::audio_path_text() const {
     switch (audio_path_) {
         case media::AudioPath::Passthrough: return "as it is";
@@ -261,6 +267,16 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
         info_.tracks.push_back(std::move(ti));
     }
     if (n > 0) libvlc_media_tracks_release(tracks, n);
+    // Styled subtitles' fonts: libVLC does not hand out attachments, so they are read from the file.
+    const bool ass = std::any_of(info_.tracks.begin(), info_.tracks.end(), [](const media::TrackInfo &t) {
+        return t.type == media::TrackType::Subtitle && t.codec_label == "ssa";
+    });
+    if (ass && !url) {
+        auto fonts = mkv_fonts(uri);
+        if (!fonts.empty()) WNK_LOGI(kCat, "%zu fonts attached for styled subtitles", fonts.size());
+        std::lock_guard<std::mutex> lock(mu_);
+        fonts_ = std::move(fonts);
+    }
     WNK_LOGI(kCat, "open %s: %zu tracks, %" PRId64 " ms", uri.c_str(), info_.tracks.size(),
              info_.duration_us == kNoTime ? int64_t{-1} : info_.duration_us / 1000);
     if (info_.tracks.empty()) {
@@ -989,6 +1005,7 @@ VlcSource::VlcSource(libvlc_instance_t *vlc, std::vector<std::string> options)
 VlcSource::~VlcSource() = default;
 std::string VlcSource::audio_path_text() const { return "none"; }
 std::string VlcSource::dovi_text() const { return {}; }
+std::vector<media::FontAttachment> VlcSource::fonts() const { return {}; }
 bool VlcSource::open(const std::string &, std::string *error) {
     if (error) *error = "this build has no libVLC";
     return false;

@@ -21,7 +21,7 @@ add_executable(vplayer main.cpp vlc_engine.cpp library.cpp pages.cpp ui/theme.cp
         player/frame_sink.cpp player/vlc_playback.cpp player/demo_playback.cpp player/video_view.cpp
         player/player_screen.cpp player/vlc_source.cpp player/hw_playback.cpp player/subtitle_text.cpp
         player/subtitle_bitmap.cpp player/dovi_detect.cpp
-        player/ebml.cpp)
+        player/ebml.cpp player/mkv_attachments.cpp)
 # ../modules: the wnk_bridge contract (wnk_bridge/wnk_bridge.h) shared with our VLC stream output.
 target_include_directories(vplayer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../modules")
 # The kit's playback controller and the TV's decoders (Starfish, NDL; dlopened, never DT_NEEDED).
@@ -99,6 +99,10 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_history SYSTEM PRIVATE "${WNK_KIT_DIR}/third_party")
     target_link_libraries(test_history PRIVATE wnk_storage wnk_async)
     add_test(NAME unit.vplayer.history COMMAND test_history)
+    add_executable(test_mkv_attachments tests/test_mkv_attachments.cpp player/mkv_attachments.cpp player/ebml.cpp)
+    target_include_directories(test_mkv_attachments PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_link_libraries(test_mkv_attachments PRIVATE wnk_media)
+    add_test(NAME unit.vplayer.mkv_attachments COMMAND test_mkv_attachments)
 endif ()
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.

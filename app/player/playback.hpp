@@ -130,6 +130,8 @@ class Playback {
     // ASS/SSA: the selected track's script header (empty: plain text) and the picture's size, which
     // the script's coordinates are scaled from.
     virtual std::string subtitle_ass_header() const { return {}; }
+    // Fonts the media carries for its styled subtitles (Matroska attachments).
+    virtual std::vector<wnk::media::FontAttachment> subtitle_fonts() const { return {}; }
     virtual std::pair<int, int> video_size() const { return {0, 0}; }
 
     // ---- timing ----

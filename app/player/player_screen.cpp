@@ -854,9 +854,11 @@ void PlayerScreen::update_subtitles(float dt) {
     if (header.empty()) return;
     subs_ass_done_ = true;
     const std::string font = s_.ctx->launch().app_dir + "/fonts/Inter-SemiBold.ttf";
-    const bool styled = subs_->set_ass_track(header, {}, font, size.first > 0 ? size.first : 1920,
+    const auto fonts = playback_->subtitle_fonts();
+    const bool styled = subs_->set_ass_track(header, fonts, font, size.first > 0 ? size.first : 1920,
                                              size.second > 0 ? size.second : 1080);
-    WNK_LOGI(kCat, "subtitles: track %d, ASS %s", track, styled ? "styled by libass" : "as plain text");
+    WNK_LOGI(kCat, "subtitles: track %d, ASS %s, %zu attached font(s)", track, styled ? "styled by libass" : "as plain text",
+             fonts.size());
 }
 
 void PlayerScreen::show_controls(Ui &ui, bool focus_play) {

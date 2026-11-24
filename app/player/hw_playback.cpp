@@ -202,6 +202,9 @@ class HwPlayback final : public Playback {
         if (track < 0 || s.position_us == media::kNoTime) return {};
         return controller_->subtitle_store().active(track, s.position_us - subtitle_delay_us_);
     }
+    std::vector<media::FontAttachment> subtitle_fonts() const override {
+        return controller_ ? source_->fonts() : std::vector<media::FontAttachment>{};
+    }
     std::string subtitle_ass_header() const override {
         return controller_ ? source_->ass_header(controller_->subtitle_track()) : std::string();
     }

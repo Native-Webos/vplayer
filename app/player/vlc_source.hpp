@@ -77,6 +77,8 @@ class VlcSource final : public wnk::media::MediaSource {
     std::string audio_path_text() const;  // "passthrough", "re-encoded to AC-3", "decoded to PCM"
     // How Dolby Vision is played ("Profile 8.1 (configuration record)"), empty when it is not.
     std::string dovi_text() const;
+    // Fonts attached to the file (local Matroska with an ASS/SSA track), read at open().
+    std::vector<wnk::media::FontAttachment> fonts() const;
 
     // Subtitles, from the main thread (libVLC's player, which select() and seek() may replace on the
     // controller's threads, is held under its own lock while used).
@@ -153,6 +155,7 @@ class VlcSource final : public wnk::media::MediaSource {
     bool dovi_convert_ = false;         // Profile 7: strip the enhancement layer, RPUs to 8.1 (reader thread)
     wnk::media::DoviStats dovi_stats_;  // reader thread
     std::string dovi_text_;             // mu_
+    std::vector<wnk::media::FontAttachment> fonts_;  // mu_
     std::atomic<double> speed_{1.0};
     // Reader thread (select() runs while it is parked): the stretcher and its timeline.
     std::unique_ptr<wnk::media::TimeStretch> stretch_;
