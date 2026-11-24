@@ -51,10 +51,22 @@ std::unique_ptr<VlcEngine> VlcEngine::create(const std::string &app_dir, VlcInfo
     // (Lua scripts) is derived by swapping /lib/ for /share/; it is stated explicitly.
     setenv("VLC_DATA_PATH", (app_dir + "/share/vlc").c_str(), 1);
 
+    // Subtitles: without fontconfig, VLC's freetype renderer wants a font FILE, and its built-in
+    // default is a desktop path the TV does not have ("Error loading default face"). Use the app's own.
+    const std::string font = "--freetype-font=" + app_dir + "/fonts/Inter-SemiBold.ttf";
+    const std::string mono = "--freetype-monofont=" + app_dir + "/fonts/Inter-Regular.ttf";
     const char *const args[] = {
         "--no-video-title-show",  // the app draws its own title
-        "--no-stats",
+        "--stats",  // the player's Info tab shows frames shown and dropped, and the input bitrate
         "--no-lua",               // no Lua interfaces/extensions yet; playlist parsers still load
+        font.c_str(),
+        mono.c_str(),
+        "--freetype-outline-thickness=4",
+        "--freetype-rel-fontsize=12",
+        // Software decoding on a 3-core TV CPU: allow FFmpeg's non-bit-exact speedups and skip the
+        // H.264/HEVC deblocking filter on non-reference frames (invisible in motion, ~20-30% less work).
+        "--avcodec-fast",
+        "--avcodec-skiploopfilter=1",  // VLC's "large" (smaller numbers are bigger): TV viewing distance
     };
     const auto start = std::chrono::steady_clock::now();
     libvlc_instance_t *vlc = libvlc_new(sizeof args / sizeof *args, args);
