@@ -56,7 +56,8 @@ struct PlayerSettings {
 
 class PlayerScreen : public wnk::ui::Screen {
  public:
-    using Opener = std::function<std::unique_ptr<Playback>(const wnk::platform::FileEntry &)>;
+    // Opens a file: the hardware path unless `software` (the TV refused it, or software is forced).
+    using Opener = std::function<std::unique_ptr<Playback>(const wnk::platform::FileEntry &, bool software)>;
 
     // `queue` is the folder's playable files and `index` the one to start with.
     PlayerScreen(Services &services, wnk::ui::Navigator &nav, Opener open, std::vector<wnk::platform::FileEntry> queue,
@@ -64,6 +65,7 @@ class PlayerScreen : public wnk::ui::Screen {
     ~PlayerScreen() override;
 
     void on_show(wnk::ui::Ui &ui) override;
+    void on_hide(wnk::ui::Ui &ui) override;
     bool on_back(wnk::ui::Ui &ui) override;
     bool on_action(wnk::ui::Ui &ui, const wnk::input::ActionEvent &e) override;
     void update(wnk::ui::Ui &ui, float dt) override;
@@ -82,8 +84,12 @@ class PlayerScreen : public wnk::ui::Screen {
     void close_panel(wnk::ui::Ui &ui);
     void apply_speed();
     void refresh_bar();
+    // Stops playback (on a worker) and leaves the player.
+    void close(wnk::ui::Ui &ui);
     // Opens the panel on `tab` (0 audio … 4 info) once the file plays: launch parameter "panel".
     void open_panel_when_playing(int tab) { pending_panel_ = tab; }
+    // Starts the first file at `ms` once it plays (launch parameter "at"; later: resume points).
+    void start_at(int64_t ms) { start_at_ms_ = ms; }
 
  protected:
     void on_descendant_focused(wnk::ui::Ui &ui, View *child, View *focused) override;
@@ -95,7 +101,6 @@ class PlayerScreen : public wnk::ui::Screen {
     void show_controls(wnk::ui::Ui &ui, bool focus_play);
     void hide_controls(wnk::ui::Ui &ui);
     void ended(wnk::ui::Ui &ui);
-    void close(wnk::ui::Ui &ui);
 
     Services &s_;
     wnk::ui::Navigator &nav_;
@@ -125,8 +130,10 @@ class PlayerScreen : public wnk::ui::Screen {
     bool controls_ = true;
     bool closing_ = false;
     bool applied_ = false;     // apply_session ran for this file
+    bool software_ = false;    // this file fell back to the software path
     bool reported_ = false;
     int pending_panel_ = -1;
+    int64_t start_at_ms_ = -1;
 };
 
 }  // namespace vplayer

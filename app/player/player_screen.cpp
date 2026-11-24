@@ -641,15 +641,25 @@ void PlayerScreen::on_show(Ui &ui) {
     ui.focus(play_);
 }
 
+void PlayerScreen::on_hide(Ui &ui) {
+    Screen::on_hide(ui);
+    ui.set_clear_color(std::nullopt);
+}
+
 void PlayerScreen::start(Ui &ui) {
     if (queue_.empty()) return;
     const auto &e = queue_[index_];
-    playback_ = open_(e);
+    playback_ = open_(e, software_);
     if (!playback_) {
         ui.toast("Cannot open " + e.name);
         return;
     }
-    video_->set_sink(playback_->frames());
+    // The hardware path draws on the TV's video plane under the UI: clear to transparent there.
+    const bool plane = playback_->video_plane();
+    video_->set_visible(!plane);
+    video_->set_sink(plane ? nullptr : playback_->frames());
+    set_background(plane ? std::nullopt : std::optional<Color>(render::kBlack));
+    ui.set_clear_color(plane ? std::optional<Color>(render::kTransparent) : std::nullopt);
     title_->set_text(display_name(e.name));
     const std::string folder = e.path.substr(0, e.path.rfind('/'));
     std::string sub = folder.substr(folder.rfind('/') + 1);
@@ -697,6 +707,7 @@ void PlayerScreen::go_to(Ui &ui, int delta) {
     }
     stop_current();
     index_ = static_cast<size_t>(target);
+    software_ = false;
     start(ui);
     show_controls(ui, false);
 }
@@ -865,6 +876,14 @@ void PlayerScreen::update(Ui &ui, float dt) {
     video_->poll();
 
     const PlayState state = playback_->state();
+    if (state == PlayState::Error && playback_->can_fall_back() && !software_) {
+        WNK_LOGW(kCat, "TV decoder refused it (%s): software path", playback_->error().c_str());
+        ui.toast("The TV decoder cannot play this file. Playing it in software.");
+        stop_current();
+        software_ = true;
+        start(ui);
+        return;
+    }
     if (state == PlayState::Error) {
         const std::string err = playback_->error();
         WNK_LOGW(kCat, "playback failed: %s", err.c_str());
@@ -882,7 +901,15 @@ void PlayerScreen::update(Ui &ui, float dt) {
         return;
     }
     if (!applied_ && (state == PlayState::Playing || state == PlayState::Paused)) apply_session();
-    if (pending_panel_ >= 0 && applied_ && video_->has_frame()) {
+    // Something on screen: a frame drawn by the app, or (video plane) the TV playing.
+    const bool shown = playback_->video_plane() ? state == PlayState::Playing || state == PlayState::Paused
+                                                : video_->has_frame();
+    if (start_at_ms_ >= 0 && shown && playback_->seekable()) {
+        WNK_LOGI(kCat, "starting at %lld ms", static_cast<long long>(start_at_ms_));
+        playback_->seek_ms(start_at_ms_);
+        start_at_ms_ = -1;
+    }
+    if (pending_panel_ >= 0 && applied_ && shown) {
         open_panel(ui, pending_panel_);
         pending_panel_ = -1;
     }
@@ -936,15 +963,15 @@ void PlayerScreen::update(Ui &ui, float dt) {
         }
     }
 
-    const bool waiting = state == PlayState::Opening || (!video_->has_frame() && d.empty());
+    const bool waiting = state == PlayState::Opening || (!shown && d.empty());
     spinner_->set_visible(waiting);
-    if (!reported_ && video_->has_frame()) {
+    if (!reported_ && shown) {
         reported_ = true;
         WNK_LOGI(kCat, "first frame shown (%s)", d.c_str());
     }
 
     // Auto-hide while playing video; audio-only, paused and an open panel keep the controls.
-    if (controls_ && !panel_->visible() && state == PlayState::Playing && video_->has_frame()) {
+    if (controls_ && !panel_->visible() && state == PlayState::Playing && shown) {
         idle_s_ += dt;
         if (idle_s_ >= kHideAfterS) hide_controls(ui);
     }
