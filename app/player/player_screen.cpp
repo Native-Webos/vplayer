@@ -160,6 +160,20 @@ class PlayPauseButton : public View {
     ImageView *play_ = nullptr, *pause_ = nullptr;
 };
 
+// A label measured with 2 units of slack: at the TV's 1.5× scale the rounded glyph widths can exceed
+// the measured width, and the text was cut to "…" (as theme.cpp's Chip).
+class SlackLabel : public Label {
+ public:
+    using Label::Label;
+
+ protected:
+    Size measure_content(Ui &ui, Size available) override {
+        Size m = Label::measure_content(ui, available);
+        m.w = std::min(m.w + 2, available.w);
+        return m;
+    }
+};
+
 // A round-ended button with text (the speed, "1.25×").
 class PillButton : public View {
  public:
@@ -170,7 +184,7 @@ class PillButton : public View {
         set_focusable(true);
         set_focus_ring(true, 32);
         accessible_label = std::move(label);
-        text_ = &add<Label>(std::move(text));
+        text_ = &add<SlackLabel>(std::move(text));
         text_->set_font_size(22);
         text_->set_bold(true);
         text_->set_align(Align::Center, Align::Center);
