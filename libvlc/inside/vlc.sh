@@ -61,9 +61,12 @@ CONFIGURE_ARGS=(
     --enable-lua --enable-sout --enable-vlm
     --enable-vlc
     --enable-smb2 --disable-dsm
+    --enable-merge-ffmpeg
     vlc_cv_replace_decl_ffsll=yes
 )
 # ^ smb2: SMB2/3 shares (libsmb2). dsm (libdsm, SMB1) is not built: see contribs.sh.
+#   merge-ffmpeg: one avcodec plugin for decoding, demuxing and parsing, instead of FFmpeg linked
+#   into three plugins (about 25 MB of the runtime).
 #   vlc_cv_replace_decl_ffsll: glibc 2.12 declares ffsll in <string.h> only, and VLC looks in
 #   <strings.h>; the replacement prototype it would add clashes with glibc's noexcept one in every
 #   C++ module.
