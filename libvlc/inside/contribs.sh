@@ -36,4 +36,8 @@ make list
 make -j"$JOBS" fetch
 # Contrib builds are not all parallel-safe at the top level; each package builds with -j inside.
 make -j"$JOBS" -k || make
+# Not selected by default on Linux: SMB2/3 shares (VLC's smb2 module). libdsm (SMB1 and NetBIOS
+# discovery) is left out: it does not build against glibc 2.12's headers (struct timespec defined
+# twice), and SMB1 is off by default on current Windows and NAS systems.
+make -j"$JOBS" .smb2
 echo "=== contribs done: $CONTRIB_PREFIX ==="

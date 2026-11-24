@@ -39,31 +39,38 @@ export LDFLAGS="$LDFLAGS -static-libstdc++ -static-libgcc -Wl,--as-needed"
 
 mkdir -p "$VLC_BUILD"
 cd "$VLC_BUILD"
-if [[ ! -f Makefile ]]; then
-    "$VLC_SRC/configure" \
-        --host="$HOST" \
-        --prefix=/usr \
-        --with-contrib="$CONTRIB_PREFIX" \
-        --enable-neon \
-        --enable-shared --disable-static \
-        --disable-nls \
-        --disable-qt --disable-skins2 --disable-ncurses \
-        --disable-xcb --disable-xvideo --disable-wayland --disable-vdpau --disable-libva \
-        --disable-dbus --disable-udev --disable-avahi --disable-lirc --disable-kwallet \
-        --disable-update-check --disable-sparkle --disable-macosx \
-        --disable-jack --disable-oss --disable-sndio \
-        --disable-v4l2 --disable-decklink --disable-dc1394 --disable-dv1394 --disable-linsys \
-        --disable-vcd --disable-libcddb \
-        --disable-chromecast --disable-goom --disable-projectm --disable-vsxu \
-        --disable-sdl-image --disable-fontconfig --disable-notify --disable-secret \
-        --disable-mtp --disable-gst-decode --disable-omxil --disable-mmal \
-        --disable-crystalhd --disable-libplacebo \
-        --enable-gles2 --enable-pulse --enable-alsa \
-        --enable-lua --enable-sout --enable-vlm \
-        --enable-vlc \
-        vlc_cv_replace_decl_ffsll=yes
-    # ^ glibc 2.12 declares ffsll in <string.h> only, and VLC looks in <strings.h>; the replacement
-    #   prototype it would add clashes with glibc's noexcept one in every C++ module.
+CONFIGURE_ARGS=(
+    --host="$HOST"
+    --prefix=/usr
+    --with-contrib="$CONTRIB_PREFIX"
+    --enable-neon
+    --enable-shared --disable-static
+    --disable-nls
+    --disable-qt --disable-skins2 --disable-ncurses
+    --disable-xcb --disable-xvideo --disable-wayland --disable-vdpau --disable-libva
+    --disable-dbus --disable-udev --disable-avahi --disable-lirc --disable-kwallet
+    --disable-update-check --disable-sparkle --disable-macosx
+    --disable-jack --disable-oss --disable-sndio
+    --disable-v4l2 --disable-decklink --disable-dc1394 --disable-dv1394 --disable-linsys
+    --disable-vcd --disable-libcddb
+    --disable-chromecast --disable-goom --disable-projectm --disable-vsxu
+    --disable-sdl-image --disable-fontconfig --disable-notify --disable-secret
+    --disable-mtp --disable-gst-decode --disable-omxil --disable-mmal
+    --disable-crystalhd --disable-libplacebo
+    --enable-gles2 --enable-pulse --enable-alsa
+    --enable-lua --enable-sout --enable-vlm
+    --enable-vlc
+    --enable-smb2 --disable-dsm
+    vlc_cv_replace_decl_ffsll=yes
+)
+# ^ smb2: SMB2/3 shares (libsmb2). dsm (libdsm, SMB1) is not built: see contribs.sh.
+#   vlc_cv_replace_decl_ffsll: glibc 2.12 declares ffsll in <string.h> only, and VLC looks in
+#   <strings.h>; the replacement prototype it would add clashes with glibc's noexcept one in every
+#   C++ module.
+# Configure again whenever the arguments change (the build is otherwise incremental).
+if [[ ! -f Makefile || "$(cat .configure-args 2>/dev/null)" != "${CONFIGURE_ARGS[*]}" ]]; then
+    "$VLC_SRC/configure" "${CONFIGURE_ARGS[@]}"
+    echo "${CONFIGURE_ARGS[*]}" > .configure-args
 fi
 
 # libtool links C++ shared objects with -nostdlib and its own runtime list, which silently defeats
