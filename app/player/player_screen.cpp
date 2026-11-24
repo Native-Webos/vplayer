@@ -531,6 +531,16 @@ PlayerScreen::PlayerScreen(Services &services, Navigator &nav, Opener open, std:
     video_ = &add<VideoView>(nullptr);
     video_->name = "player.video";
 
+    subs_ = &add<wnk::media::SubtitleView>();
+    subs_->name = "player.subtitles";
+    subs_->set_visible(false);
+    subs_->set_provider([this] {
+        return playback_ && !closing_ ? playback_->subtitle_cues() : wnk::media::SubtitleView::Cues{};
+    });
+    subs_->set_clock([this] {
+        return playback_ ? (playback_->time_ms() - settings_.subtitle_delay_ms) * 1000 : int64_t{0};
+    });
+
     catcher_ = &add<View>();
     catcher_->set_focusable(true);
     catcher_->set_focus_ring(false);
@@ -658,6 +668,10 @@ void PlayerScreen::start(Ui &ui) {
     const bool plane = playback_->video_plane();
     video_->set_visible(!plane);
     video_->set_sink(plane ? nullptr : playback_->frames());
+    subs_->set_visible(plane);
+    subs_->clear_ass_track();
+    subs_track_ = -2;
+    subs_size_ = {0, 0};
     set_background(plane ? std::nullopt : std::optional<Color>(render::kBlack));
     ui.set_clear_color(plane ? std::optional<Color>(render::kTransparent) : std::nullopt);
     title_->set_text(display_name(e.name));
@@ -753,6 +767,45 @@ void PlayerScreen::close_panel(Ui &ui) {
 }
 
 void PlayerScreen::refresh_bar() { apply_speed(); }
+
+void PlayerScreen::update_subtitles(float dt) {
+    // Above the control bar while it shows (not for the side panel), near the bottom otherwise.
+    const bool bar = overlay_->visible() && overlay_alpha_ > 0.5f;
+    subs_->set_bottom_margin(bar ? 0.22f : 0.07f);
+
+    // The picture's rectangle on screen (the TV fits it into the whole screen), so subtitles sit on
+    // the picture and styled ASS scales with it.
+    const auto size = playback_->video_size();
+    if (size != subs_size_ && size.first > 0 && size.second > 0) {
+        subs_size_ = size;
+        const Rect f = frame();
+        const float scale = std::min(f.w / size.first, f.h / size.second);
+        const float w = size.first * scale, h = size.second * scale;
+        subs_->set_video_rect({f.x + (f.w - w) / 2, f.y + (f.h - h) / 2, w, h});
+        subs_track_ = -2;  // styled ASS needs the size too
+    }
+
+    // Styled ASS/SSA through libass when the selected track has a script header. The header comes
+    // with the stream, a moment after the track is chosen: plain text shows until then.
+    const int track = playback_->subtitle_track();
+    if (track != subs_track_) {
+        subs_track_ = track;
+        subs_ass_done_ = false;
+        subs_retry_s_ = 0;
+        subs_->clear_ass_track();
+    }
+    if (subs_ass_done_ || track < 0) return;
+    subs_retry_s_ -= dt;
+    if (subs_retry_s_ > 0) return;
+    subs_retry_s_ = 0.5f;
+    const std::string header = playback_->subtitle_ass_header();
+    if (header.empty()) return;
+    subs_ass_done_ = true;
+    const std::string font = s_.ctx->launch().app_dir + "/fonts/Inter-SemiBold.ttf";
+    const bool styled = subs_->set_ass_track(header, {}, font, size.first > 0 ? size.first : 1920,
+                                             size.second > 0 ? size.second : 1080);
+    WNK_LOGI(kCat, "subtitles: track %d, ASS %s", track, styled ? "styled by libass" : "as plain text");
+}
 
 void PlayerScreen::show_controls(Ui &ui, bool focus_play) {
     idle_s_ = 0;
@@ -874,6 +927,7 @@ void PlayerScreen::update(Ui &ui, float dt) {
     if (!playback_ || closing_) return;
     playback_->tick();
     video_->poll();
+    if (playback_->video_plane()) update_subtitles(dt);
 
     const PlayState state = playback_->state();
     if (state == PlayState::Error && playback_->can_fall_back() && !software_) {

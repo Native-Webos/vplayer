@@ -22,6 +22,7 @@
 #include "player/video_view.hpp"
 
 #include "wnk/app/wake_lock.hpp"
+#include "wnk/media/subtitle_view.hpp"
 #include "wnk/platform/files.hpp"
 #include "wnk/ui/navigation.hpp"
 
@@ -101,6 +102,7 @@ class PlayerScreen : public wnk::ui::Screen {
     void show_controls(wnk::ui::Ui &ui, bool focus_play);
     void hide_controls(wnk::ui::Ui &ui);
     void ended(wnk::ui::Ui &ui);
+    void update_subtitles(float dt);             // hardware path: styled ASS, the picture's rectangle
 
     Services &s_;
     wnk::ui::Navigator &nav_;
@@ -112,6 +114,13 @@ class PlayerScreen : public wnk::ui::Screen {
     wnk::app::WakeLock wake_;
 
     VideoView *video_ = nullptr;
+    // Hardware path: subtitles drawn by the app over the TV's picture (the software path has VLC
+    // blend them into its frames).
+    wnk::media::SubtitleView *subs_ = nullptr;
+    int subs_track_ = -2;          // the track styled ASS was looked at for
+    bool subs_ass_done_ = false;   // its header was found and given to libass (or it has none)
+    float subs_retry_s_ = 0;
+    std::pair<int, int> subs_size_{0, 0};
     View *catcher_ = nullptr;   // takes focus while the controls are hidden (no visible ring)
     View *overlay_ = nullptr;
     PlayerPanel *panel_ = nullptr;
