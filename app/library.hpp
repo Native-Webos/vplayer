@@ -40,5 +40,8 @@ std::string extension_upper(const std::string &name);
 std::string display_name(const std::string &name);
 // A position for people: "4:05", "1:02:03".
 std::string clock_text(int64_t ms);
+// What people type for a position: "1:23:45", "83:10", "95" (seconds), "1.23.45" or "1 23 45" with
+// any separators; -1 when it is not one.
+int64_t parse_clock(const std::string &text);
 
 }  // namespace vplayer

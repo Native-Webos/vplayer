@@ -112,6 +112,10 @@ if (NOT WNK_WEBOS)
     target_include_directories(test_music PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
     target_link_libraries(test_music PRIVATE wnk_platform)
     add_test(NAME unit.vplayer.music COMMAND test_music)
+    add_executable(test_library tests/test_library.cpp library.cpp)
+    target_include_directories(test_library PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
+    target_link_libraries(test_library PRIVATE wnk_platform)
+    add_test(NAME unit.vplayer.library COMMAND test_library)
 endif ()
 
 # Host smoke test: the Video page scans for drives and reports, then Back twice at the root quits.

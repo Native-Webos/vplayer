@@ -380,6 +380,37 @@ class PlayerPanel : public View {
         delay.set_description("Positive when the text comes too early");
     }
 
+    void ask_time(Ui &ui) {
+        Playback *p = screen_.playback();
+        if (p == nullptr) return;
+        auto d = std::make_unique<Dialog>("Jump to time", "Hours, minutes and seconds: 1:23:45, 83:10, or seconds: 95. "
+                                                          "This file is " + clock_text(p->length_ms()) + " long.");
+        auto &field = d->body().add<TextField>(clock_text(p->time_ms()));
+        auto go = [this](Ui &u, const std::string &text) {
+            const int64_t ms = parse_clock(text);
+            Playback *pb = screen_.playback();
+            if (ms < 0 || pb == nullptr) {
+                u.toast("That is not a time (try 1:23:45).");
+                return false;
+            }
+            if (pb->length_ms() > 0 && ms > pb->length_ms()) {
+                u.toast("The file is only " + clock_text(pb->length_ms()) + " long.");
+                return false;
+            }
+            pb->seek_ms(ms);
+            u.toast("Jumping to " + clock_text(ms));
+            screen_.close_panel(u);
+            return true;
+        };
+        field.set_on_submit([go](Ui &u, const std::string &text) {
+            if (go(u, text)) u.dismiss_dialog(u.top_dialog());
+        });
+        d->add_button("Go", [go, &field](Ui &u) { go(u, field.text()); });
+        d->add_button("Cancel");
+        ui.show_dialog(std::move(d));
+        ui.focus(&field);
+    }
+
     void pick_subtitle_file(Ui &ui) {
         const std::string &path = screen_.current().path;
         const std::string folder = path.substr(0, path.rfind('/'));
@@ -466,6 +497,7 @@ class PlayerPanel : public View {
 
     void build_playback(Ui &, Playback &p, PlayerSettings &st) {
         if (p.seekable()) {
+            rows_->add<ValueRow>("Jump to time", clock_text(p.time_ms()), [this](Ui &ui) { ask_time(ui); });
             rows_->add<ValueRow>("Start from the beginning", "", [this](Ui &ui) {
                 screen_.restart_file(ui);
                 screen_.close_panel(ui);

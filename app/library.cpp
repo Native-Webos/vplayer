@@ -8,6 +8,7 @@
 #include <deque>
 #include <sys/stat.h>
 #include <utility>
+#include <vector>
 
 namespace vplayer {
 
@@ -132,6 +133,29 @@ std::string clock_text(int64_t ms) {
         std::snprintf(buf, sizeof buf, "%lld:%02lld", static_cast<long long>(s / 60), static_cast<long long>(s % 60));
     }
     return buf;
+}
+
+int64_t parse_clock(const std::string &text) {
+    std::vector<int64_t> parts;
+    std::string digits;
+    for (const char c : text + " ") {
+        if (c >= '0' && c <= '9') {
+            digits += c;
+            if (digits.size() > 6) return -1;
+        } else if (!digits.empty()) {
+            parts.push_back(std::stoll(digits));
+            digits.clear();
+        } else if (c != ' ' && c != ':' && c != '.' && c != '-') {
+            return -1;
+        }
+    }
+    if (parts.empty() || parts.size() > 3) return -1;
+    int64_t s = 0;
+    for (size_t k = 0; k < parts.size(); ++k) {
+        if (k > 0 && parts[k] >= 60) return -1;  // minutes and seconds after the first part
+        s = s * 60 + parts[k];
+    }
+    return s * 1000;
 }
 
 }  // namespace vplayer
