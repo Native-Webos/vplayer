@@ -139,6 +139,8 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
     const size_t at = had ? grid_->focused_index() : 0;
     root_.clear();
     root_.push_back({RootItem::Kind::Add, "Add a playlist or IPTV list", ""});
+    if (s_.my_playlists != nullptr)
+        for (const auto &l : *s_.my_playlists) root_.push_back({RootItem::Kind::Mine, l.name, ""});
     for (const auto &l : saved_) root_.push_back({RootItem::Kind::Saved, l.name.empty() ? mrl_display_name(l.url) : l.name, l.url});
     for (const auto &f : files_) root_.push_back({RootItem::Kind::File, display_name(f.name), f.path});
     set_header("", "", std::to_string(root_.size() - 1) + (root_.size() == 2 ? " list" : " lists"));
@@ -150,6 +152,12 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
         if (r.kind == RootItem::Kind::Add) {
             t.subtitle = "M3U, M3U8, PLS or XSPF address";
             t.tint = ui::Color::hex(0x3A2410FF);
+        } else if (r.kind == RootItem::Kind::Mine) {
+            size_t n = 0;
+            for (const auto &l : *s_.my_playlists)
+                if (l.name == r.name) n = l.items.size();
+            t.subtitle = "Your playlist · " + std::to_string(n) + (n == 1 ? " entry" : " entries");
+            t.tint = ui::tint_for(r.name);
         } else if (r.kind == RootItem::Kind::Saved) {
             t.subtitle = mrl_protocol(r.location) + " · added by address";
         } else {
@@ -159,11 +167,12 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
         return std::make_unique<Tile>(t);
     });
     message_->set_visible(false);
-    hint_->set_text(saved_.empty() ? "" : "Red: forget a list added by address.");
+    hint_->set_text("Red: forget a list added by address, or delete one of your playlists.");
     if ((focus && had) || focus) grid_->focus_index(ui, std::min(at, root_.size() - 1));
 }
 
 void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string &location) {
+    mine_ = -1;
     loading_.cancel();
     loading_ = wnk::async::CancellationSource();
     list_name_ = name;
@@ -275,6 +284,16 @@ void PlaylistsPage::activate(Ui &ui, size_t i) {
             const RootItem r = root_[i];
             if (r.kind == RootItem::Kind::Add) {
                 open_address_dialog(ui);
+            } else if (r.kind == RootItem::Kind::Mine) {
+                for (size_t k = 0; k < s_.my_playlists->size(); ++k) {
+                    if ((*s_.my_playlists)[k].name != r.name) continue;
+                    mine_ = static_cast<int>(k);
+                    list_name_ = r.name;
+                    list_location_.clear();
+                    Playlist pl;
+                    pl.items = (*s_.my_playlists)[k].items;
+                    show_list(ui, std::move(pl), "");
+                }
             } else {
                 open_list(ui, r.name, r.location);
             }
@@ -301,10 +320,39 @@ void PlaylistsPage::activate(Ui &ui, size_t i) {
 }
 
 bool PlaylistsPage::on_action(Ui &ui, const input::ActionEvent &e) {
+    // Red inside one of the viewer's own playlists removes the entry.
+    if (e.action == input::Action::Red && level_ == Level::Entries && mine_ >= 0 &&
+        mine_ < static_cast<int>(s_.my_playlists->size())) {
+        if (e.phase != input::Phase::Press) return true;
+        const size_t i = grid_->focused_index();
+        if (i < shown_.size()) {
+            const std::string loc = shown_[i]->location, title = shown_[i]->title;
+            auto &items = (*s_.my_playlists)[static_cast<size_t>(mine_)].items;
+            items.erase(std::remove_if(items.begin(), items.end(), [&](const PlaylistItem &x) { return x.location == loc; }),
+                        items.end());
+            if (s_.save_my_playlists) s_.save_my_playlists();
+            ui.toast("Removed " + title);
+            list_.items = items;
+            groups_ = list_.groups();
+            if (list_.items.empty()) {
+                show_root(ui, true);
+            } else {
+                show_entries(ui, groups_.empty() ? std::string() : groups_[0]);
+            }
+        }
+        return true;
+    }
     if (e.action == input::Action::Red && level_ == Level::Root) {
         if (e.phase != input::Phase::Press) return true;
         const size_t i = grid_->focused_index();
-        if (i < root_.size() && root_[i].kind == RootItem::Kind::Saved) {
+        if (i < root_.size() && root_[i].kind == RootItem::Kind::Mine) {
+            const std::string name = root_[i].name;
+            auto &mine = *s_.my_playlists;
+            mine.erase(std::remove_if(mine.begin(), mine.end(), [&](const MyPlaylist &l) { return l.name == name; }), mine.end());
+            if (s_.save_my_playlists) s_.save_my_playlists();
+            ui.toast("Deleted " + name);
+            show_root(ui, true);
+        } else if (i < root_.size() && root_[i].kind == RootItem::Kind::Saved) {
             const std::string url = root_[i].location, name = root_[i].name;
             saved_.erase(std::remove_if(saved_.begin(), saved_.end(), [&](const SavedPlaylist &l) { return l.url == url; }),
                          saved_.end());

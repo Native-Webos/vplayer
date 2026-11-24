@@ -49,4 +49,14 @@ struct SavedPlaylist {
 std::string saved_playlists_json(const std::vector<SavedPlaylist> &lists);
 std::vector<SavedPlaylist> saved_playlists_from_json(const std::string &json);
 
+// The viewer's own playlists (made in the app), kept in its store.
+struct MyPlaylist {
+    std::string name;
+    std::vector<PlaylistItem> items;
+};
+std::string my_playlists_json(const std::vector<MyPlaylist> &lists);
+std::vector<MyPlaylist> my_playlists_from_json(const std::string &json);
+// Adds `item` to the list called `name` (made when missing); false when it is there already.
+bool my_playlists_add(std::vector<MyPlaylist> *lists, const std::string &name, const PlaylistItem &item);
+
 }  // namespace vplayer

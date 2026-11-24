@@ -91,6 +91,19 @@ TEST("saved_lists") {
     CHECK(saved_playlists_from_json("{}").empty());
 }
 
+TEST("my_playlists") {
+    std::vector<MyPlaylist> l;
+    CHECK(my_playlists_add(&l, "Films", {"A", "/usb/a.mkv", {}, {}, -1}));
+    CHECK(my_playlists_add(&l, "Films", {"B", "smb://nas/b.mkv", {}, {}, -1}));
+    CHECK(!my_playlists_add(&l, "Films", {"A again", "/usb/a.mkv", {}, {}, -1}));  // already there
+    CHECK(my_playlists_add(&l, "Music", {"S", "/usb/s.flac", {}, {}, -1}));
+    const auto back = my_playlists_from_json(my_playlists_json(l));
+    REQUIRE(back.size() == 2);
+    REQUIRE(back[0].items.size() == 2);
+    CHECK_EQ(back[0].items[1].location, std::string("smb://nas/b.mkv"));
+    CHECK_EQ(back[1].name, std::string("Music"));
+}
+
 TEST("formats_and_resolution") {
     CHECK(playlist_format("x.M3U8?token=1", "") == PlaylistFormat::M3u);
     CHECK(playlist_format("noext", "[playlist]\n") == PlaylistFormat::Pls);

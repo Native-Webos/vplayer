@@ -269,6 +269,45 @@ std::vector<SavedPlaylist> saved_playlists_from_json(const std::string &text) {
     return out;
 }
 
+std::string my_playlists_json(const std::vector<MyPlaylist> &lists) {
+    nlohmann::json j = nlohmann::json::array();
+    for (const auto &l : lists) {
+        nlohmann::json items = nlohmann::json::array();
+        for (const auto &i : l.items) items.push_back({{"t", i.title}, {"l", i.location}});
+        j.push_back({{"name", l.name}, {"items", items}});
+    }
+    return j.dump();
+}
+
+std::vector<MyPlaylist> my_playlists_from_json(const std::string &text) {
+    std::vector<MyPlaylist> out;
+    const auto j = nlohmann::json::parse(text, nullptr, false);
+    if (j.is_discarded() || !j.is_array()) return out;
+    for (const auto &x : j) {
+        if (!x.is_object() || !x.contains("name") || !x["name"].is_string()) continue;
+        MyPlaylist l;
+        l.name = x["name"].get<std::string>();
+        if (auto it = x.find("items"); it != x.end() && it->is_array())
+            for (const auto &i : *it)
+                if (i.is_object() && i.contains("l") && i["l"].is_string())
+                    l.items.push_back({i.value("t", std::string()), i["l"].get<std::string>(), {}, {}, -1});
+        out.push_back(std::move(l));
+    }
+    return out;
+}
+
+bool my_playlists_add(std::vector<MyPlaylist> *lists, const std::string &name, const PlaylistItem &item) {
+    auto it = std::find_if(lists->begin(), lists->end(), [&](const MyPlaylist &l) { return l.name == name; });
+    if (it == lists->end()) {
+        lists->push_back({name, {}});
+        it = lists->end() - 1;
+    }
+    if (std::any_of(it->items.begin(), it->items.end(), [&](const PlaylistItem &i) { return i.location == item.location; }))
+        return false;
+    it->items.push_back(item);
+    return true;
+}
+
 bool parse_playlist(const std::string &text, const std::string &location, Playlist *out, std::string *error) {
     *out = {};
     switch (playlist_format(location, text)) {

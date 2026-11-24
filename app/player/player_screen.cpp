@@ -381,6 +381,40 @@ class PlayerPanel : public View {
         delay.set_description("Positive when the text comes too early");
     }
 
+    void add_to_playlist(Ui &ui) {
+        const auto &e = screen_.current();
+        const PlaylistItem item{display_name(e.name), e.path, {}, {}, -1};
+        auto add = [this, item](Ui &u, const std::string &name) {
+            const bool added = my_playlists_add(screen_.my_playlists(), name, item);
+            screen_.save_my_playlists();
+            u.toast(added ? "Added to " + name : name + " has it already.");
+        };
+        auto d = std::make_unique<Dialog>("Add to a playlist", display_name(e.name));
+        int n = 0;
+        for (const auto &l : *screen_.my_playlists()) {
+            if (n++ >= 6) break;
+            d->add_button(l.name, [add, name = l.name](Ui &u) { add(u, name); });
+        }
+        d->add_button("New playlist…", [this, add](Ui &u) {
+            auto nd = std::make_unique<Dialog>("New playlist", "Its name:");
+            auto &field = nd->body().add<TextField>("Weekend films");
+            // OK on the keyboard creates it at once.
+            field.set_on_submit([add](Ui &u2, const std::string &name) {
+                if (name.empty()) return;
+                add(u2, name);
+                u2.dismiss_dialog(u2.top_dialog());
+            });
+            nd->add_button("Create", [add, &field](Ui &u2) {
+                if (!field.text().empty()) add(u2, field.text());
+            });
+            nd->add_button("Cancel");
+            u.show_dialog(std::move(nd));
+            u.focus(&field);
+        });
+        d->add_button("Cancel");
+        ui.show_dialog(std::move(d));
+    }
+
     void ask_time(Ui &ui) {
         Playback *p = screen_.playback();
         if (p == nullptr) return;
@@ -518,6 +552,8 @@ class PlayerPanel : public View {
             }
             section("POSITION");
         }
+        if (screen_.my_playlists() != nullptr)
+            rows_->add<ValueRow>("Add to a playlist", "Your playlists", [this](Ui &ui) { add_to_playlist(ui); });
         if (p.seekable()) {
             rows_->add<ValueRow>("Jump to time", clock_text(p.time_ms()), [this](Ui &ui) { ask_time(ui); });
             rows_->add<ValueRow>("Start from the beginning", "", [this](Ui &ui) {

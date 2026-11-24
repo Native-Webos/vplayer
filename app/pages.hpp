@@ -5,6 +5,7 @@
 
 #include "app_settings.hpp"
 #include "history.hpp"
+#include "playlist.hpp"
 #include "ui/theme.hpp"
 #include "vlc_engine.hpp"
 
@@ -26,6 +27,9 @@ struct Services {
     wnk::app::Context *ctx = nullptr;
     PlayHistory *history = nullptr;  // resume points, "Continue watching" (main thread)
     const AppSettings *settings = nullptr;
+    // The viewer's own playlists (playlist.hpp), and saving them after a change (main thread).
+    std::vector<MyPlaylist> *my_playlists = nullptr;
+    std::function<void()> save_my_playlists;
     std::function<void(Tab)> show_tab;
     std::function<void(const std::string &folder)> browse_to;  // Browse tab, at that folder
     std::function<void(const wnk::platform::FileEntry &)> play;

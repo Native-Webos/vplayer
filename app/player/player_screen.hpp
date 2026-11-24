@@ -87,6 +87,10 @@ class PlayerScreen : public wnk::ui::Screen {
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }
+    std::vector<MyPlaylist> *my_playlists() { return s_.my_playlists; }
+    void save_my_playlists() {
+        if (s_.save_my_playlists) s_.save_my_playlists();
+    }
     wnk::async::WorkerPool &pool() { return s_.ctx->pool(); }
     void refresh_bar();
     // Stops playback (on a worker) and leaves the player.

@@ -52,6 +52,7 @@ struct EngineResult {
     std::string hw_why;
     std::vector<vplayer::HistoryEntry> history;  // read from the store on the same worker
     vplayer::AppSettings settings;
+    std::vector<vplayer::MyPlaylist> my_playlists;
 };
 
 class MainScreen : public Screen {
@@ -167,6 +168,14 @@ class App : public wnk::app::Delegate {
         services_.ctx = &ctx;
         services_.history = &history_;
         services_.settings = &settings_;
+        services_.my_playlists = &my_playlists_;
+        services_.save_my_playlists = [this] {
+            auto *store = services_.ctx->store();
+            if (store == nullptr) return;
+            services_.ctx->pool().submit([store, json = vplayer::my_playlists_json(my_playlists_)](const wnk::async::CancellationToken &) {
+                store->put("playlists.mine", json);
+            });
+        };
         services_.open_stream = [this, &ctx] {
             main_->go(ctx.ui(), Tab::Network);
             main_->network().open_url_dialog(ctx.ui());
@@ -194,6 +203,11 @@ class App : public wnk::app::Delegate {
             [app_dir, store](const wnk::async::CancellationToken &) {
                 EngineResult r;
                 r.history = vplayer::read_history(store);  // blocking store reads: here, on a worker
+                if (store != nullptr) {
+                    wnk::storage::Entry e;
+                    if (store->get("playlists.mine", &e) == wnk::storage::Status::Ok)
+                        r.my_playlists = vplayer::my_playlists_from_json(e.value);
+                }
                 r.settings = vplayer::read_settings(store);
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info);
                 // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
@@ -209,6 +223,7 @@ class App : public wnk::app::Delegate {
                 engine_ = std::move(r.engine);
                 vlc_info_ = std::move(r.info);
                 history_.adopt(ctx.store(), std::move(r.history));
+                my_playlists_ = std::move(r.my_playlists);
                 settings_ = r.settings;
                 history_.set_resume(settings_.resume);
                 if (settings_.software_only && decoder_ == "auto") decoder_ = "software";
@@ -427,6 +442,7 @@ class App : public wnk::app::Delegate {
     std::unique_ptr<vplayer::VlcDialogs> dialogs_;
     vplayer::PlayHistory history_;
     vplayer::AppSettings settings_;
+    std::vector<vplayer::MyPlaylist> my_playlists_;
     std::optional<vplayer::VlcInfo> vlc_info_;
     std::optional<wnk::platform::FileEntry> pending_play_;
     std::vector<std::string> vlc_options_;

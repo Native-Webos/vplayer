@@ -31,7 +31,7 @@ class PlaylistsPage : public Page {
  private:
     enum class Level : uint8_t { Root, Groups, Entries };
     struct RootItem {
-        enum class Kind : uint8_t { Add, Saved, File } kind;
+        enum class Kind : uint8_t { Add, Mine, Saved, File } kind;
         std::string name, location;
     };
 
@@ -53,6 +53,7 @@ class PlaylistsPage : public Page {
     std::vector<RootItem> root_;
     Level level_ = Level::Root;
     std::string list_name_, list_location_;
+    int mine_ = -1;  // the own playlist shown, -1 when another list
     Playlist list_;
     std::vector<std::string> groups_;
     std::string group_;                     // the group shown (Entries)
