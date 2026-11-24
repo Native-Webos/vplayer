@@ -948,8 +948,18 @@ void PlayerScreen::apply_session() {
 }
 
 void PlayerScreen::apply_effects(Ui &ui) {
+    (void)ui;
+    if (!playback_ || playback_->apply_audio_effects(settings_.effects())) {
+        effects_wait_s_ = 0;
+        return;
+    }
+    // The engine takes them at open: once the viewer stops changing them (stepping the volume from
+    // 100 to 200 % would otherwise reopen the file four times).
+    effects_wait_s_ = 0.7f;
+}
+
+void PlayerScreen::reopen_for_effects(Ui &ui) {
     if (!playback_ || playback_->apply_audio_effects(settings_.effects())) return;
-    // The engine takes them at open: the same file again, from here.
     start_at_ms_ = playback_->time_ms();
     reopen_ = Reopen{playback_->audio_track(), playback_->subtitle_track(), settings_.audio_delay_ms,
                      settings_.subtitle_delay_ms};
@@ -975,6 +985,7 @@ void PlayerScreen::go_to(Ui &ui, int delta) {
     }
     stop_current();
     reopen_.reset();
+    effects_wait_s_ = 0;  // the next file opens with the effects as they are
     index_ = static_cast<size_t>(target);
     software_ = false;
     start(ui);
@@ -1188,6 +1199,11 @@ void PlayerScreen::update(Ui &ui, float dt) {
     playback_->tick();
     video_->poll();
     if (playback_->video_plane()) update_subtitles(dt);
+    if (effects_wait_s_ > 0 && (effects_wait_s_ -= dt) <= 0) {
+        effects_wait_s_ = 0;
+        reopen_for_effects(ui);
+        if (!playback_) return;
+    }
 
     const PlayState state = playback_->state();
     if (state == PlayState::Error && playback_->can_fall_back() && !software_) {

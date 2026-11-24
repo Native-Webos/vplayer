@@ -91,6 +91,7 @@ class PlayerScreen : public wnk::ui::Screen {
     void apply_speed();
     // The audio effects changed: applied live where the engine can, else the file reopens here.
     void apply_effects(wnk::ui::Ui &ui);
+    void reopen_for_effects(wnk::ui::Ui &ui);
     void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void take_snapshot(wnk::ui::Ui &ui);  // a PNG on the first writable drive
     PlayHistory *history() { return s_.history; }
@@ -154,6 +155,7 @@ class PlayerScreen : public wnk::ui::Screen {
     float overlay_alpha_ = 1, overlay_target_ = 1;
     float clock_s_ = 0;
     float speed_settle_s_ = 0;
+    float effects_wait_s_ = 0;  // > 0: audio effects to reopen with once it runs out
     float history_s_ = 0;       // since the position was last remembered
     bool ended_ = false;        // this file played to its end
     bool resume_note_ = false;  // start_at_ms_ is a resume point: say so when it applies  // after a speed change, before checking what the engine plays
