@@ -35,6 +35,28 @@ Then the rest of the sections as time allows.
 9. **Shutdown:** close the app while thumbnails are being made, and while an album's tags are read;
    it closes within a second or two (log: `shutdown` lines)
 
+## Results of the first pass (2026-11-25, OLED65C1, webOS 6.5.3)
+
+| Item | Result |
+|---|---|
+| 1.1–1.4 install, DB8, HTTP, libVLC | Pass (libVLC ready in ~250 ms) |
+| 9.1, 9.2, 9.3 Dolby Vision P7→8.1 and 8.1, skips | Pass (0 dropped; the TV shows its Dolby Vision badge; skips land in ~0.2 s) |
+| 9.7, 7b.1 subtitles | Pass after fixes: SubRip lines through libass were tiny with a stray comma (wrong Format line), only the first showed (ReadOrder), `<i>` was lost, lines sat under the control bar |
+| 7b.3 aspect and zoom | Pass (4:3 → 240,0 1440×1080; zoom 125 % → a rectangle larger than the screen, accepted) |
+| 7b.14 teletext | Pass after a fix: every .ts fell back to software after 15 s (stream ids by PID) |
+| 7b.18 captions | Pass after a fix: captions chosen after the start missed what was already read |
+| 5.1, 5.6, 5.7 music | Pass |
+| 6.1, 6.2 resume | Pass |
+| 7b.11 snapshot | Pass (1920×1080 PNG in "VPlayer snapshots") |
+| 7b.13 thumbnails | Pass (~0.33 s each on the TV) |
+| Shutdown during thumbnails and tag reading | Pass (0.6 s and 0.2 s) |
+| 3.1 discovery | Runs, 0 servers here; `socket bind error` from SAP at start (harmless) |
+| 7b.15–7b.17 audio effects | Mechanics pass (gain in the transcode chain, reopen in ~0.2 s); **by ear: not yet** |
+| 3.3–3.6 SMB, 7b.12 playlist, 7b.19 caption seek | Not yet (need a NAS, typing, more time) |
+
+Follow-ups found: effect changes reopen once per step (debounce them); "Continue watching" tiles have
+no thumbnails.
+
 ## 1. Install and start (new permissions)
 
 | # | Test | Expected | Log |
