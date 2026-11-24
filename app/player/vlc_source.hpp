@@ -13,8 +13,9 @@
 //             and waits for the streams' formats (codec setup, HDR metadata)
 //   read()    the next packet: H.264/HEVC Annex-B with parameter sets on keyframes, HDR10+ SEI
 //             removed, AAC with ADTS when the backend wants it, AV1 as temporal units
-//   seek()    libVLC seeks (fast, to a keyframe); packets still on their way from before the jump
-//             are dropped until VLC flushes each stream, then until a video keyframe
+//   seek()    libVLC seeks (fast, from an index point before the target); packets still on their
+//             way from before the jump are dropped until VLC flushes each stream; playback then
+//             restarts at the newest video keyframe at or before the target
 //
 // Subtitles: the subtitle track libVLC has selected (by default flags, language preferences, a
 // file beside the media, or set_subtitle_track) reaches the bridge too. Text formats become cues
@@ -146,6 +147,11 @@ class VlcSource final : public wnk::media::MediaSource {
     bool seeking_ = false;
     int64_t seek_target_us_ = 0;
     std::chrono::steady_clock::time_point seek_started_;
+    std::deque<Item> seek_gop_;  // from the newest keyframe at or before the target (mu_)
+    size_t seek_gop_bytes_ = 0;
+    int64_t seek_gop_key_us_ = 0;
+    void land_seek_locked(int64_t at);
+    void commit_seek_gop_locked();
     int64_t audio_from_us_ = wnk::media::kNoTime;
 };
 

@@ -30,8 +30,9 @@ namespace {
 constexpr const char *kCat = "vlcsrc";
 constexpr size_t kMaxQueueBytes = 6u << 20;  // a few seconds of 4K HEVC; the controller reads ahead itself
 constexpr size_t kMaxQueueItems = 400;
-constexpr int64_t kSeekWindowUs = 20'000'000;  // without a flush: a keyframe this close to the target ends a seek
 constexpr auto kFlushWait = std::chrono::seconds(3);  // how long a seek waits for VLC's flush
+constexpr int64_t kSeekToleranceUs = 20'000;          // a keyframe this close to the target is at it
+constexpr size_t kMaxSeekGopBytes = 32u << 20;        // a longer GOP is handed over as it is
 constexpr int64_t kRebaseAboveUs = 1'000'000;  // streams starting later than this are rebased
 
 constexpr uint32_t fourcc(char a, char b, char c, char d) {
@@ -341,6 +342,11 @@ bool VlcSource::start_player(std::string *error) {
             libvlc_media_add_option(m, ":sub-language=none");
         }
     }
+    // The media's own timestamps: VLC 3 converts a sout's to its playback clock, which restarts
+    // at every seek (libvlc/patches/vlc/0004 adds the option).
+    libvlc_media_add_option(m, ":sout-stream-time");
+    // Only the selected streams (VLC 3 streams every one by default, transcoding each audio track).
+    libvlc_media_add_option(m, ":no-sout-all");
     libvlc_media_add_option(m, ":input-fast-seek");  // seek to keyframes; the decoder starts there anyway
     if (want_video_ >= 0) {
         libvlc_media_add_option(m, (":video-track-id=" + std::to_string(want_video_)).c_str());
@@ -421,8 +427,9 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
         return raw;
     }
     if (d->cat != WNK_ES_VIDEO && d->cat != WNK_ES_AUDIO) return nullptr;
-    if (d->cat == WNK_ES_VIDEO && (self->want_video_ < 0 || self->video_ != nullptr)) return nullptr;
-    if (d->cat == WNK_ES_AUDIO && (self->want_audio_ < 0 || self->audio_ != nullptr)) return nullptr;
+    // Only the tracks select() asked for (VLC may offer others: a track changing, sout-all).
+    if (d->cat == WNK_ES_VIDEO && (d->es_id != self->want_video_ || self->video_ != nullptr)) return nullptr;
+    if (d->cat == WNK_ES_AUDIO && (d->es_id != self->want_audio_ || self->audio_ != nullptr)) return nullptr;
     auto s = std::make_unique<Stream>();
     s->cat = d->cat;
     s->es_id = d->es_id;
@@ -515,21 +522,48 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
     const int64_t when = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
     const bool key = (flags & WNK_BLOCK_KEY) != 0;
 
-    // After a seek: packets read before it are still on their way, and close to the target when the
-    // jump is short. VLC flushes each stream when its input seeks (through #transcode too, with our
-    // patch), on the stream's own thread, after the old packets: everything before the flush is
-    // dropped. Then wait for a video keyframe (or any audio without video); audio from just before
-    // it on. Should no flush come, a keyframe near the target ends the seek.
+    Item item;
+    item.stream = s;
+    item.pts = pts == WNK_BRIDGE_NO_TIME ? kNoTime : pts;
+    item.dts = dts == WNK_BRIDGE_NO_TIME ? kNoTime : dts;
+    item.duration = length > 0 ? length : 0;
+    item.key = key;
+
+    // After a seek. Packets read before it are still on their way: VLC flushes each stream when its
+    // input seeks (through #transcode too, with our patch), on the stream's own thread after the old
+    // packets, and everything before that flush is dropped (should none come, after kFlushWait).
+    // Then VLC's fast seek starts reading from an index point that can be well before the target
+    // (Matroska: 9 s for a 10 s skip), so the newest video keyframe at or before the target is kept
+    // with everything after it, and handed over once a packet reaches the target: playback restarts
+    // at most one GOP before it. Without video, audio from the target on.
     if (self->seeking_) {
         if (s->awaiting_flush && std::chrono::steady_clock::now() - self->seek_started_ < kFlushWait) return 0;
-        const bool flushed = !s->awaiting_flush;
-        const bool near = when != WNK_BRIDGE_NO_TIME && std::llabs(when - self->seek_target_us_) < kSeekWindowUs;
-        const bool video = self->video_ != nullptr;
-        if ((!flushed && !near) || (video && (s != self->video_ || !key)) || (!video && s != self->audio_)) return 0;
-        self->seeking_ = false;
-        self->audio_from_us_ = video ? when - 100'000 : kNoTime;
-        WNK_LOGI(kCat, "seek landed at %" PRId64 " ms (asked %" PRId64 ")%s", when / 1000, self->seek_target_us_ / 1000,
-                 flushed ? "" : " without a flush from VLC");
+        if (s != self->video_ && s != self->audio_) return 0;
+        const int64_t target = self->seek_target_us_;
+        if (self->video_ == nullptr) {
+            if (when == WNK_BRIDGE_NO_TIME || when < target - 100'000) return 0;
+            self->land_seek_locked(when);
+        } else if (s == self->video_ && key && when != WNK_BRIDGE_NO_TIME && when <= target + kSeekToleranceUs) {
+            self->seek_gop_.clear();  // a newer keyframe before the target: restart there
+            self->seek_gop_bytes_ = 0;
+            self->seek_gop_key_us_ = when;
+            item.data.assign(data, data + size);
+            self->seek_gop_bytes_ += item.data.size();
+            self->seek_gop_.push_back(std::move(item));
+            if (when >= target - kSeekToleranceUs) self->commit_seek_gop_locked();
+            return 0;
+        } else if (self->seek_gop_.empty()) {
+            // No keyframe before the target seen: VLC started past it. Land on the first keyframe.
+            if (s != self->video_ || !key) return 0;
+            self->land_seek_locked(when);
+        } else {
+            item.data.assign(data, data + size);
+            self->seek_gop_bytes_ += item.data.size();
+            self->seek_gop_.push_back(std::move(item));
+            const bool reached = s == self->video_ && when != WNK_BRIDGE_NO_TIME && when >= target;
+            if (reached || self->seek_gop_bytes_ > kMaxSeekGopBytes) self->commit_seek_gop_locked();
+            return 0;
+        }
     }
     if (s == self->audio_ && self->audio_from_us_ != kNoTime) {
         if (when != WNK_BRIDGE_NO_TIME && when < self->audio_from_us_) return 0;
@@ -543,17 +577,34 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
     });
     if (self->stopping_ || s->removed || self->seeking_) return 0;
 
-    Item item;
-    item.stream = s;
     item.data.assign(data, data + size);
-    item.pts = pts == WNK_BRIDGE_NO_TIME ? kNoTime : pts;
-    item.dts = dts == WNK_BRIDGE_NO_TIME ? kNoTime : dts;
-    item.duration = length > 0 ? length : 0;
-    item.key = key;
     self->queued_bytes_ += item.data.size();
     self->queue_.push_back(std::move(item));
     self->cv_.notify_all();
     return 0;
+}
+
+// mu_ held. The seek ends at `at` (a video keyframe, or audio without video).
+void VlcSource::land_seek_locked(int64_t at) {
+    seeking_ = false;
+    audio_from_us_ = video_ != nullptr ? at - 100'000 : kNoTime;
+    seek_gop_.clear();
+    seek_gop_bytes_ = 0;
+    WNK_LOGI(kCat, "seek landed at %" PRId64 " ms (asked %" PRId64 ")", at / 1000, seek_target_us_ / 1000);
+}
+
+// mu_ held. Hands the buffered GOP (keyframe at or before the target, and what followed) to the
+// reader; audio from just before the keyframe on.
+void VlcSource::commit_seek_gop_locked() {
+    std::deque<Item> gop;
+    gop.swap(seek_gop_);
+    land_seek_locked(seek_gop_key_us_);
+    for (auto &i : gop) {
+        if (i.stream == audio_ && i.pts != kNoTime && i.pts < audio_from_us_) continue;
+        queued_bytes_ += i.data.size();
+        queue_.push_back(std::move(i));
+    }
+    cv_.notify_all();
 }
 
 void VlcSource::on_flush(void *opaque, void *id) {
@@ -632,6 +683,10 @@ media::MediaSource::Read VlcSource::read(media::Packet *out, std::string *error)
             if (error) *error = "libVLC stopped with an error";
             return Read::Error;
         }
+        if (st == libvlc_Ended && seeking_ && !seek_gop_.empty()) {
+            commit_seek_gop_locked();  // the input ended before reaching the target: play what is left
+            continue;
+        }
         if (st == libvlc_Ended || (started_ && st == libvlc_Stopped)) return Read::EndOfStream;
         cv_.wait_for(lock, std::chrono::milliseconds(100));
     }
@@ -649,6 +704,8 @@ bool VlcSource::seek(int64_t pts_us, std::string *error) {
         seeking_ = true;
         seek_target_us_ = std::max<int64_t>(0, pts_us);
         seek_started_ = std::chrono::steady_clock::now();
+        seek_gop_.clear();
+        seek_gop_bytes_ = 0;
         audio_from_us_ = kNoTime;
         for (auto &st : streams_)
             if (st->cat != WNK_ES_SUBTITLE) st->awaiting_flush = true;
@@ -792,6 +849,8 @@ bool VlcSource::start_player(std::string *) { return false; }
 void VlcSource::stop_player() {}
 std::string VlcSource::sout_chain() const { return {}; }
 void VlcSource::to_packet(Item &, media::Packet *) {}
+void VlcSource::land_seek_locked(int64_t) {}
+void VlcSource::commit_seek_gop_locked() {}
 libvlc_media_player_t *VlcSource::hold_player() const { return nullptr; }
 std::vector<VlcSource::SubtitleTrack> VlcSource::subtitle_tracks() const { return {}; }
 int VlcSource::subtitle_track() const { return -1; }
