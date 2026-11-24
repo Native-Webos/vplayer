@@ -150,6 +150,46 @@ TEST("dvd_no_stop") {
     CHECK_EQ(cues[0]->canvas_w, 720);  // nothing known: PAL DVD
 }
 
+namespace {
+void dvb_seg(std::vector<uint8_t> &out, uint8_t type, const std::vector<uint8_t> &body) {
+    out.insert(out.end(), {0x0F, type, 0x00, 0x01, static_cast<uint8_t>(body.size() >> 8), static_cast<uint8_t>(body.size())});
+    out.insert(out.end(), body.begin(), body.end());
+}
+}  // namespace
+
+TEST("dvb_display_set") {
+    std::vector<uint8_t> d = {0x20, 0x00};  // as in a PES
+    dvb_seg(d, 0x10, {5, 0x00, 1, 0, 0, 100, 0, 200});  // 5 s, region 1 at (100, 200)
+    // Region 1: 4x2, filled, 2-bit, CLUT 0, object 5 at (0, 0).
+    dvb_seg(d, 0x11, {1, 0x08, 0, 4, 0, 2, 0x24, 0, 0, 0, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00});
+    dvb_seg(d, 0x12, {0, 0, 1, 0x81, 235, 128, 128, 0});  // entry 1 (2-bit): white, opaque
+    // Object 5: top field "1 1 1 1" then end of string, end of line; the bottom field repeats it.
+    dvb_seg(d, 0x13, {0, 5, 0x00, 0, 4, 0, 0, 0x10, 0x55, 0x00, 0xF0});
+    dvb_seg(d, 0x80, {});
+    BitmapSubtitleDecoder dec(fourcc("dvbs"), nullptr, 0, 0);
+    auto cues = dec.decode(d.data(), d.size(), 2, 1'000'000);
+    REQUIRE(cues.size() == 1);
+    const auto &c = *cues[0];
+    CHECK_EQ(c.canvas_w, 720);
+    CHECK_EQ(c.canvas_h, 576);
+    CHECK_EQ(c.end_us, int64_t{6'000'000});
+    REQUIRE(c.bitmaps.size() == 1);
+    const auto &b = c.bitmaps[0];
+    CHECK_EQ(b.x, 100);
+    CHECK_EQ(b.y, 200);
+    CHECK_EQ(b.width, 4);
+    CHECK_EQ(b.height, 2);
+    CHECK(px(b, 3, 1, 0) >= 250 && px(b, 3, 1, 3) == 255);
+
+    // A page without regions clears.
+    std::vector<uint8_t> clear;
+    dvb_seg(clear, 0x10, {5, 0x00});
+    dvb_seg(clear, 0x80, {});
+    cues = dec.decode(clear.data(), clear.size(), 2, 3'000'000);
+    REQUIRE(cues.size() == 1);
+    CHECK(cues[0]->empty());
+}
+
 TEST("malformed_is_safe") {
     BitmapSubtitleDecoder pgs(fourcc("bdpg"), nullptr, 0, 0);
     const uint8_t junk[] = {0x16, 0xFF, 0xFF, 0x01};
@@ -157,4 +197,7 @@ TEST("malformed_is_safe") {
     BitmapSubtitleDecoder dvd(fourcc("spu "), nullptr, 0, 0);
     const uint8_t short_spu[] = {0x00, 0x08, 0x00, 0x40, 0x01};
     CHECK(dvd.decode(short_spu, sizeof short_spu, 0, 0).size() <= 1);
+    BitmapSubtitleDecoder dvb(fourcc("dvbs"), nullptr, 0, 0);
+    const uint8_t cut[] = {0x0F, 0x13, 0x00, 0x01, 0x00, 0x40, 0x00};
+    CHECK(dvb.decode(cut, sizeof cut, 0, 0).empty());
 }

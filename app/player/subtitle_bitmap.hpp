@@ -10,6 +10,11 @@
 //           coloured through the stream's 16-colour palette (from the bridge's description), with
 //           display start and stop in its control sequence (no stop, or 0xFFFF: until the next
 //           subpicture). The canvas is the stream's original frame, else the video's size.
+//   'dvbs'  DVB subtitles (ETSI EN 300 743, from TV recordings): page and region compositions,
+//           colour tables and object data (2-, 4- and 8-bit pixel strings with the standard map
+//           tables), drawn into their regions at the end of a display set; a page without regions
+//           clears. The display definition gives the canvas (720x576 without one); the page time-out
+//           ends the cue.
 //
 // Colours: YCbCr to RGB, BT.709 for HD canvases, BT.601 otherwise, limited range. Bitmaps are
 // cropped to their visible pixels. Pure: no libVLC, testable on the host.
@@ -56,6 +61,41 @@ class BitmapSubtitleDecoder {
 
     std::vector<Cue> decode_pgs(const uint8_t *data, size_t size, int track, int64_t pts_us);
     std::vector<Cue> decode_dvd(const uint8_t *data, size_t size, int track, int64_t pts_us);
+    std::vector<Cue> decode_dvb(const uint8_t *data, size_t size, int track, int64_t pts_us);
+    Cue dvb_cue(int track, int64_t pts_us);
+
+    // DVB state: regions, colour tables and objects of the current page.
+    struct DvbRegion {
+        int width = 0, height = 0, depth = 8;  // depth in bits per pixel: 2, 4 or 8
+        int clut = 0;
+        bool fill = false;
+        int background = 0;
+        struct Ref {
+            int object = 0, x = 0, y = 0;
+        };
+        std::vector<Ref> objects;
+    };
+    struct DvbClut {
+        std::array<uint32_t, 4> t2{};
+        std::array<uint32_t, 16> t4{};
+        std::array<uint32_t, 256> t8{};
+    };
+    struct DvbObject {
+        std::vector<uint8_t> top, bottom;  // pixel-data sub-blocks of each field
+    };
+    struct DvbPlacement {
+        int region = 0, x = 0, y = 0;
+    };
+    DvbClut default_clut() const;
+    void draw_dvb_object(const DvbObject &o, const DvbRegion &r, int ox, int oy, std::vector<uint8_t> *px) const;
+    std::map<int, DvbRegion> dvb_regions_;
+    std::map<int, DvbClut> dvb_cluts_;
+    std::map<int, DvbObject> dvb_objects_;
+    std::vector<DvbPlacement> dvb_page_;
+    int dvb_timeout_s_ = 0;
+    bool dvb_have_page_ = false;
+    int dvb_w_ = 720, dvb_h_ = 576;
+    int64_t dvb_pts_ = wnk::media::kNoTime;
     uint32_t rgba(int y, int cb, int cr, int a, bool hd) const;
 
     uint32_t fourcc_;

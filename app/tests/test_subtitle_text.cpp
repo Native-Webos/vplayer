@@ -44,7 +44,8 @@ TEST("kinds") {
     CHECK(subtitle_kind(fourcc("wvtt")) == SubtitleKind::Text);
     CHECK(subtitle_kind(fourcc("bdpg")) == SubtitleKind::Bitmap);
     CHECK(subtitle_kind(fourcc("spu ")) == SubtitleKind::Bitmap);
-    CHECK(subtitle_kind(fourcc("dvbs")) == SubtitleKind::None);
+    CHECK(subtitle_kind(fourcc("dvbs")) == SubtitleKind::Bitmap);
+    CHECK(subtitle_kind(fourcc("ttxt")) == SubtitleKind::None);
 }
 
 TEST("subrip_tags_and_timing") {

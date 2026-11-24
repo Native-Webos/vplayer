@@ -19,7 +19,7 @@
 //
 // Subtitles: the subtitle track libVLC has selected (by default flags, language preferences, a
 // file beside the media, or set_subtitle_track) reaches the bridge too. Text formats
-// (subtitle_text.hpp) and PGS and DVD bitmaps (subtitle_bitmap.hpp) become cues here and are read as Subtitle packets, which the controller keeps in its
+// (subtitle_text.hpp) and PGS, DVD and DVB bitmaps (subtitle_bitmap.hpp) become cues here and are read as Subtitle packets, which the controller keeps in its
 // store; they never wait for queue room, so they cannot hold up video or audio. Only the selected
 // track is delivered (libVLC selects one subtitle stream at a time), so the subtitle track is
 // changed through libVLC, which then adds the new stream.

@@ -260,7 +260,7 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
             first_audio = false;
         } else if (t->i_type == libvlc_track_text) {
             ti.type = media::TrackType::Subtitle;
-            ti.subtitle = subtitle_kind(t->i_codec);  // text, PGS and DVD; None for the rest (DVB, ...)
+            ti.subtitle = subtitle_kind(t->i_codec);  // text, PGS, DVD, DVB; None for teletext, captions
         } else {
             continue;
         }
