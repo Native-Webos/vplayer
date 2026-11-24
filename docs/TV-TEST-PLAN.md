@@ -16,6 +16,24 @@ how to test it, what should happen, and what the log shows.
   (also `"at"` seconds, `"panel"`, `"decoder"`, `"vlcOptions"`, `"browse"`).
 - Needed on the network for section 3: a DLNA server (a NAS, Plex, Jellyfin or minidlna), an SMB share
   with a password (a NAS or Windows), optionally NFS/FTP/SFTP servers.
+- The test media include `teletext.ts` (page 888, German), `captions.mkv` (CEA-608) and `Music/`
+  (`Test Artist/Tagged Album`, `Other Artist/Untagged`); about 420 MB, made in under a minute.
+
+## First pass (about an hour)
+
+The riskiest items first: what has never run on the TV and could crash, hang or misbehave there.
+Then the rest of the sections as time allows.
+
+1. **Start:** 1.1, 1.2, 1.4 (a crash or hang here blocks everything else)
+2. **Regression:** 9.1, 9.2, 9.3, 9.7 (Dolby Vision, seeking and subtitles still as before)
+3. **Audio effects:** 7b.15, 7b.16, 7b.17 (the file reopens; VLC filters before the TV)
+4. **Picture:** 7b.3 (fill and zoom: a picture area larger than the screen)
+5. **New subtitles:** 7b.14 with `teletext.ts`, 7b.18 and 7b.19 with `captions.mkv`, 7b.1, 7b.10
+6. **Library:** 7b.13 (thumbnails: speed, memory, the player unaffected), 5.1, 5.6, 5.7, 6.1, 6.2
+7. **Network:** 3.1, 3.3, 3.4, 3.6 (SMB with a password)
+8. **Writing to the drive:** 7b.11 (snapshot), 7b.12 (a playlist)
+9. **Shutdown:** close the app while thumbnails are being made, and while an album's tags are read;
+   it closes within a second or two (log: `shutdown` lines)
 
 ## 1. Install and start (new permissions)
 
@@ -70,7 +88,7 @@ how to test it, what should happen, and what the log shows.
 
 | # | Test | Expected |
 |---|---|---|
-| 5.1 | A USB drive with `Artist/Album/*.mp3` and `cover.jpg` | Music tab: albums with covers, "Shuffle all" first |
+| 5.1 | The test media's `Music/` (or your own `Artist/Album/*.mp3` with `cover.jpg`) | Music tab: albums with covers, "Shuffle all" first |
 | 5.2 | Open an album, play a track | Plays (software path, PulseAudio); the player shows the cover; the next track follows |
 | 5.3 | Shuffle all | Tracks from every album in random order |
 | 5.4 | FLAC, AAC/M4A, OGG, Opus, WAV tracks | All play |
@@ -117,11 +135,11 @@ how to test it, what should happen, and what the log shows.
 | 7b.11 | Software decoder → Video → Take a snapshot | "Snapshot saved…" and a PNG in "VPlayer snapshots" on the drive (can the app write to USB?) |
 | 7b.12 | Playback → Add to a playlist → New playlist; Playlists tab | The list with the file; plays; Red removes an entry / the list |
 | 7b.13 | Browse a folder of videos, Home "Recently added" | Thumbnails appear one by one (log `[thumbs] … in N ms`); none made while a video plays |
-| 7b.14 | A DVB recording with teletext subtitles (e.g. page 888) on the TV decoder | Subtitles show and clear, with the language's accented letters |
+| 7b.14 | `teletext.ts` (then a real DVB recording with teletext subtitles) on the TV decoder | Subtitles list the teletext track; 2–6 s "Teletext page 888…" and "Grüße aus Köln", 8–12 s, 14–20 s with Ä ö Ü ß §; clear between |
 | 7b.15 | Audio: Equalizer "Rock", on the TV decoder path | A toast, the file reopens at the same spot (1-2 s), the sound changes; the panel says the TV gets PCM |
 | 7b.16 | Audio: Volume boost 200 %, Normalise loudness, Wider stereo (TV decoder, then software path) | Each audible; software path: equalizer and volume change without a reopen |
 | 7b.17 | Audio effects back to Off / 100 % on a TrueHD or Atmos file | Passthrough (or the TV's decoding) again after the reopen |
-| 7b.18 | An H.264 recording with A/53 captions (US cable/streaming capture) on the TV decoder | Subtitles list "Closed captions (CC1)"; chosen: pop-on lines appear in sync and clear; roll-up lines scroll |
+| 7b.18 | `captions.mkv` (then a real US recording with captions) on the TV decoder | Subtitles list "Closed captions (CC1)"; chosen: 1.5–5 s two lines, 6.5 s "café très, España, más", 10.5–14 s one line, 16–26 s roll-up lines scrolling two at a time |
 | 7b.18b | An MPEG-2 ATSC .ts (over-the-air) | Plays on the software path (the TV decoder path takes no MPEG-2); VLC's own "Closed captions 1" track |
 | 7b.19 | Captions on, then seek | No stale lines after the seek; captions resume within a few seconds |
 
