@@ -97,4 +97,16 @@ std::string display_name(const std::string &name) {
     return name.substr(0, dot);
 }
 
+std::string clock_text(int64_t ms) {
+    const int64_t s = std::max<int64_t>(0, ms) / 1000;
+    char buf[32];
+    if (s >= 3600) {
+        std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", static_cast<long long>(s / 3600),
+                      static_cast<long long>(s / 60 % 60), static_cast<long long>(s % 60));
+    } else {
+        std::snprintf(buf, sizeof buf, "%lld:%02lld", static_cast<long long>(s / 60), static_cast<long long>(s % 60));
+    }
+    return buf;
+}
+
 }  // namespace vplayer

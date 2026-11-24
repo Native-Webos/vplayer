@@ -44,6 +44,7 @@ struct EngineResult {
     vplayer::HwOptions hw;   // what the TV says it supports (Dolby Vision, Atmos)
     bool hw_available = false;
     std::string hw_why;
+    std::vector<vplayer::HistoryEntry> history;  // read from the store on the same worker
 };
 
 class MainScreen : public Screen {
@@ -159,6 +160,7 @@ class App : public wnk::app::Delegate {
         auto &ui = ctx.ui();
 
         services_.ctx = &ctx;
+        services_.history = &history_;
         services_.show_tab = [this, &ctx](Tab t) { main_->go(ctx.ui(), t); };
         services_.browse_to = [this, &ctx](const std::string &folder) { main_->browse_to(ctx.ui(), folder); };
         services_.play = [this, &ctx](const wnk::platform::FileEntry &e) { play(ctx.ui(), e); };
@@ -174,10 +176,12 @@ class App : public wnk::app::Delegate {
         apply_launch_params(ctx, ctx.launch().params_json);
 
         const std::string app_dir = ctx.launch().app_dir;
+        auto *store = ctx.store();
         wnk::async::run_then_post<EngineResult>(
             ctx.pool(), ctx.dispatcher(), lifetime_.weak(), cancel_.token(),
-            [app_dir](const wnk::async::CancellationToken &) {
+            [app_dir, store](const wnk::async::CancellationToken &) {
                 EngineResult r;
+                r.history = vplayer::read_history(store);  // blocking store read: here, on a worker
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info);
                 // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
                 r.hw_available = vplayer::hw_playback_available(&r.hw_why);
@@ -191,6 +195,7 @@ class App : public wnk::app::Delegate {
             [this, &ctx](EngineResult r) {
                 engine_ = std::move(r.engine);
                 vlc_info_ = std::move(r.info);
+                history_.adopt(ctx.store(), std::move(r.history));
                 hw_ = r.hw;
                 hw_available_ = r.hw_available;
                 if (engine_) {
@@ -349,6 +354,7 @@ class App : public wnk::app::Delegate {
     MainScreen *main_ = nullptr;
     std::shared_ptr<vplayer::VlcEngine> engine_;
     std::unique_ptr<vplayer::VlcDialogs> dialogs_;
+    vplayer::PlayHistory history_;
     std::optional<vplayer::VlcInfo> vlc_info_;
     std::optional<wnk::platform::FileEntry> pending_play_;
     std::vector<std::string> vlc_options_;

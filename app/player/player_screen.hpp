@@ -84,6 +84,7 @@ class PlayerScreen : public wnk::ui::Screen {
     void open_panel(wnk::ui::Ui &ui, int tab);
     void close_panel(wnk::ui::Ui &ui);
     void apply_speed();
+    void restart_file(wnk::ui::Ui &ui);  // to 0:00, resume point dropped
     void refresh_bar();
     // Stops playback (on a worker) and leaves the player.
     void close(wnk::ui::Ui &ui);
@@ -102,6 +103,7 @@ class PlayerScreen : public wnk::ui::Screen {
     void show_controls(wnk::ui::Ui &ui, bool focus_play);
     void hide_controls(wnk::ui::Ui &ui);
     void ended(wnk::ui::Ui &ui);
+    void remember_position();              // resume point and history, from the current playback
     void update_subtitles(float dt);             // hardware path: styled ASS, the picture's rectangle
 
     Services &s_;
@@ -136,7 +138,10 @@ class PlayerScreen : public wnk::ui::Screen {
     float idle_s_ = 0;
     float overlay_alpha_ = 1, overlay_target_ = 1;
     float clock_s_ = 0;
-    float speed_settle_s_ = 0;  // after a speed change, before checking what the engine plays
+    float speed_settle_s_ = 0;
+    float history_s_ = 0;       // since the position was last remembered
+    bool ended_ = false;        // this file played to its end
+    bool resume_note_ = false;  // start_at_ms_ is a resume point: say so when it applies  // after a speed change, before checking what the engine plays
     bool controls_ = true;
     bool closing_ = false;
     bool applied_ = false;     // apply_session ran for this file

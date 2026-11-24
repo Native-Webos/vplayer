@@ -43,17 +43,6 @@ const std::vector<std::string> kRepeatNames = {"Off", "This file", "Folder"};
 const std::vector<std::string> kSleepNames = {"Off", "15 min", "30 min", "45 min", "60 min", "90 min", "End of this file"};
 const int kSleepMinutes[] = {0, 15, 30, 45, 60, 90, -1};
 
-std::string clock_text(int64_t ms) {
-    const int64_t s = std::max<int64_t>(0, ms) / 1000;
-    char buf[32];
-    if (s >= 3600) {
-        std::snprintf(buf, sizeof buf, "%lld:%02lld:%02lld", static_cast<long long>(s / 3600),
-                      static_cast<long long>(s / 60 % 60), static_cast<long long>(s % 60));
-    } else {
-        std::snprintf(buf, sizeof buf, "%lld:%02lld", static_cast<long long>(s / 60), static_cast<long long>(s % 60));
-    }
-    return buf;
-}
 
 std::string delay_text(float seconds) {
     char buf[32];
@@ -472,6 +461,12 @@ class PlayerPanel : public View {
     }
 
     void build_playback(Ui &, Playback &p, PlayerSettings &st) {
+        if (p.seekable()) {
+            rows_->add<ValueRow>("Start from the beginning", "", [this](Ui &ui) {
+                screen_.restart_file(ui);
+                screen_.close_panel(ui);
+            });
+        }
         section("SPEED AND REPEAT");
         if (p.can_change_rate()) {
             rows_->add<Choice>("Speed", kSpeedNames, st.speed, [this](Ui &, int i) {
@@ -702,14 +697,48 @@ void PlayerScreen::start(Ui &ui) {
     format_->set_visible(false);
     settings_.audio_delay_ms = settings_.subtitle_delay_ms = 0;
     settings_.a_ms = settings_.b_ms = -1;
+    ended_ = false;
+    history_s_ = 0;
+    // A resume point (not for the launch parameter "at", which is set already).
+    if (start_at_ms_ < 0 && s_.history != nullptr) {
+        const int64_t r = s_.history->resume_ms(e.path);
+        if (r > 0) {
+            start_at_ms_ = r;
+            resume_note_ = true;
+        }
+    }
     applied_ = reported_ = false;
     prev_btn_->set_enabled(has_previous());
     next_btn_->set_enabled(has_next());
     WNK_LOGI(kCat, "open %zu/%zu: %s", index_ + 1, queue_.size(), e.path.c_str());
 }
 
+// Where this file stopped, for its resume point and "Continue watching".
+void PlayerScreen::remember_position() {
+    if (!playback_ || s_.history == nullptr || !reported_ || queue_.empty()) return;
+    const auto &e = queue_[index_];
+    HistoryEntry h;
+    h.path = e.path;
+    h.name = e.name;
+    h.length_ms = playback_->length_ms();
+    h.position_ms = ended_ ? h.length_ms : playback_->time_ms();
+    h.watched = ended_;
+    h.played_at_s = static_cast<int64_t>(std::time(nullptr));
+    if (h.length_ms <= 0 && !ended_) return;  // a live stream: nothing to resume
+    s_.history->record(h, s_.ctx->pool());
+}
+
+void PlayerScreen::restart_file(Ui &ui) {
+    if (!playback_) return;
+    playback_->seek_ms(0);
+    if (s_.history != nullptr && !queue_.empty()) s_.history->restart(queue_[index_].path, s_.ctx->pool());
+    history_s_ = 0;
+    ui.toast("From the beginning.");
+}
+
 void PlayerScreen::stop_current() {
     if (!playback_) return;
+    remember_position();
     // libVLC's stop is synchronous and can take a moment: do it on a worker. The frame sink stays
     // alive with the video view until both are gone.
     std::shared_ptr<Playback> p(std::move(playback_));
@@ -974,6 +1003,7 @@ void PlayerScreen::update(Ui &ui, float dt) {
     }
     if (state == PlayState::Ended) {
         WNK_LOGI(kCat, "playback ended");
+        ended_ = true;
         ended(ui);
         return;
     }
@@ -984,6 +1014,8 @@ void PlayerScreen::update(Ui &ui, float dt) {
     if (start_at_ms_ >= 0 && shown && playback_->seekable()) {
         WNK_LOGI(kCat, "starting at %lld ms", static_cast<long long>(start_at_ms_));
         playback_->seek_ms(start_at_ms_);
+        if (resume_note_) ui.toast("Continuing from " + clock_text(start_at_ms_) + ". To start over: Playback, then Start from the beginning.", 5000);
+        resume_note_ = false;
         start_at_ms_ = -1;
     }
     if (pending_panel_ >= 0 && applied_ && shown) {
@@ -1020,6 +1052,11 @@ void PlayerScreen::update(Ui &ui, float dt) {
     // may refuse one: the TV decoder above 60 fps of video).
     clock_s_ += dt;
     speed_settle_s_ -= dt;
+    history_s_ += dt;
+    if (history_s_ >= 10 && state == PlayState::Playing) {
+        history_s_ = 0;
+        remember_position();
+    }
     if (clock_s_ >= 0.5f) {
         clock_s_ = 0;
         if (playback_->can_change_rate() && applied_ && speed_settle_s_ <= 0) {

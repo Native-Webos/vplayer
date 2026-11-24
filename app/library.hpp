@@ -32,5 +32,7 @@ std::string format_bytes(uint64_t bytes);
 std::string extension_upper(const std::string &name);
 // The file name without its extension, for titles ("Film (2025)" for "Film (2025).mkv").
 std::string display_name(const std::string &name);
+// A position for people: "4:05", "1:02:03".
+std::string clock_text(int64_t ms);
 
 }  // namespace vplayer
