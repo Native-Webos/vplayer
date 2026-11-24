@@ -6,6 +6,7 @@
 //
 // The main screen is a top bar (logo, tabs, search, settings) over one page per tab. libVLC starts
 // on a worker while the UI comes up; Settings shows what it reported.
+#include "app_settings.hpp"
 #include "library.hpp"
 #include "network_page.hpp"
 #include "pages.hpp"
@@ -19,6 +20,7 @@
 #include "wnk/async/async.hpp"
 #include "wnk/log.hpp"
 #include "wnk/media/device_caps.hpp"
+#include "wnk/ui/forms.hpp"
 #include "wnk/ui/navigation.hpp"
 #include "wnk/ui/widgets.hpp"
 
@@ -45,6 +47,7 @@ struct EngineResult {
     bool hw_available = false;
     std::string hw_why;
     std::vector<vplayer::HistoryEntry> history;  // read from the store on the same worker
+    vplayer::AppSettings settings;
 };
 
 class MainScreen : public Screen {
@@ -173,7 +176,7 @@ class App : public wnk::app::Delegate {
         };
 
         nav_ = &ui.root().add<Navigator>();
-        auto main = std::make_unique<MainScreen>(services_, [this](Ui &u) { show_about(u); });
+        auto main = std::make_unique<MainScreen>(services_, [this](Ui &u) { show_settings(u); });
         main_ = main.get();
         nav_->push(ui, std::move(main));
         main_->focus_page(ui);  // start on the hero card, not the first thing in the top bar
@@ -185,7 +188,8 @@ class App : public wnk::app::Delegate {
             ctx.pool(), ctx.dispatcher(), lifetime_.weak(), cancel_.token(),
             [app_dir, store](const wnk::async::CancellationToken &) {
                 EngineResult r;
-                r.history = vplayer::read_history(store);  // blocking store read: here, on a worker
+                r.history = vplayer::read_history(store);  // blocking store reads: here, on a worker
+                r.settings = vplayer::read_settings(store);
                 r.engine = vplayer::VlcEngine::create(app_dir, r.info);
                 // The TV's decoders and what it may be told about (blocking Luna calls: here, on a worker).
                 r.hw_available = vplayer::hw_playback_available(&r.hw_why);
@@ -200,6 +204,9 @@ class App : public wnk::app::Delegate {
                 engine_ = std::move(r.engine);
                 vlc_info_ = std::move(r.info);
                 history_.adopt(ctx.store(), std::move(r.history));
+                settings_ = r.settings;
+                history_.set_resume(settings_.resume);
+                if (settings_.software_only && decoder_ == "auto") decoder_ = "software";
                 hw_ = r.hw;
                 hw_available_ = r.hw_available;
                 if (engine_) {
@@ -335,6 +342,24 @@ class App : public wnk::app::Delegate {
         }
     }
 
+    void show_settings(Ui &ui) {
+        auto d = std::make_unique<Dialog>("Settings");
+        const std::vector<std::string> decoders = {"Automatic (the TV's decoder when it can)", "Software (VLC) only"};
+        d->body().add<wnk::ui::Choice>("Decoder", decoders, settings_.software_only ? 1 : 0, [this](Ui &, int i) {
+            settings_.software_only = i == 1;
+            decoder_ = settings_.software_only ? "software" : "auto";
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        d->body().add<wnk::ui::Toggle>("Continue where I stopped", settings_.resume, [this](Ui &, bool on) {
+            settings_.resume = on;
+            history_.set_resume(on);
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        d->add_button("About VPlayer", [this](Ui &u) { show_about(u); });
+        d->add_button("Close");
+        ui.show_dialog(std::move(d));
+    }
+
     void show_about(Ui &ui) {
         std::string msg;
         if (!vlc_info_) {
@@ -359,6 +384,7 @@ class App : public wnk::app::Delegate {
     std::shared_ptr<vplayer::VlcEngine> engine_;
     std::unique_ptr<vplayer::VlcDialogs> dialogs_;
     vplayer::PlayHistory history_;
+    vplayer::AppSettings settings_;
     std::optional<vplayer::VlcInfo> vlc_info_;
     std::optional<wnk::platform::FileEntry> pending_play_;
     std::vector<std::string> vlc_options_;

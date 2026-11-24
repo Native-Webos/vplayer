@@ -58,7 +58,8 @@ class PlayHistory {
     void record(const HistoryEntry &e, wnk::async::WorkerPool &pool);
     void forget(const std::string &path, wnk::async::WorkerPool &pool);
     void restart(const std::string &path, wnk::async::WorkerPool &pool);  // resume point dropped
-    int64_t resume_ms(const std::string &path) const { return history_resume_ms(list_, path); }
+    int64_t resume_ms(const std::string &path) const { return resume_ ? history_resume_ms(list_, path) : 0; }
+    void set_resume(bool on) { resume_ = on; }  // Settings: "Continue where I stopped"
     std::vector<HistoryEntry> continue_list(size_t max) const { return history_continue(list_, max); }
     // Bumps on every change (pages redraw their rail when it moves).
     uint64_t generation() const { return generation_; }
@@ -74,6 +75,7 @@ class PlayHistory {
     wnk::storage::KeyValueStore *store_ = nullptr;
     std::vector<HistoryEntry> list_;
     bool loaded_ = false;
+    bool resume_ = true;
     uint64_t generation_ = 0;
 };
 
