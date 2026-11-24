@@ -7,9 +7,9 @@
 // The picture is on a plane under the UI: the player screen clears the UI to transparent and draws
 // only its controls. 4K, HDR10, HLG and Dolby Vision play here; the software path cannot.
 //
-// Subtitles: libVLC delivers the selected subtitle stream through the bridge; text formats become
-// cues in the controller's store, which the player screen draws over the picture (subtitle_cues).
-// Bitmap formats (PGS, DVD, DVB) are listed but not shown yet.
+// Subtitles: libVLC delivers the selected subtitle stream through the bridge; text, PGS and DVD
+// subtitles become cues in the controller's store, which the player screen draws over the picture
+// (subtitle_cues). Other bitmap formats (DVB, teletext) are listed but not shown yet.
 //
 // Not yet on this path: chapters, video filters and the equalizer (the TV decodes; VLC never sees
 // the pictures or the samples).

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/vlc_source.hpp"
 
+#include "player/subtitle_bitmap.hpp"
 #include "player/subtitle_text.hpp"
 #include "vlc_engine.hpp"
 
@@ -147,6 +148,7 @@ struct VlcSource::Stream {
     unsigned width = 0, height = 0, fps_num = 0, fps_den = 0, rate = 0, channels = 0;
     media::VideoColour colour;
     std::string encoding;  // subtitles: the declared character set, if any
+    std::unique_ptr<BitmapSubtitleDecoder> bitmap;  // PGS, DVD subtitles
     bool removed = false;
     bool awaiting_flush = false;  // a seek was asked: what arrives before VLC's flush is from before it
 };
@@ -237,7 +239,7 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
             first_audio = false;
         } else if (t->i_type == libvlc_track_text) {
             ti.type = media::TrackType::Subtitle;
-            ti.subtitle = subtitle_kind(t->i_codec);  // text formats; bitmaps are not delivered yet
+            ti.subtitle = subtitle_kind(t->i_codec);  // text, PGS and DVD; None for the rest (DVB, ...)
         } else {
             continue;
         }
@@ -406,7 +408,8 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
     if (d->cat == WNK_ES_SUBTITLE) {
         auto &seen = self->seen_subtitles_[d->es_id];
         seen.codec = d->codec;
-        if (subtitle_kind(d->codec) != media::SubtitleKind::Text) {
+        const media::SubtitleKind kind = subtitle_kind(d->codec);
+        if (kind == media::SubtitleKind::None) {
             WNK_LOGI(kCat, "subtitle stream %d: %s, not drawn on this path yet", d->es_id, fourcc_text(d->codec).c_str());
             return nullptr;
         }
@@ -415,6 +418,10 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
         s->es_id = d->es_id;
         s->codec = d->codec;
         if (d->encoding) s->encoding = d->encoding;
+        if (kind == media::SubtitleKind::Bitmap)
+            s->bitmap = std::make_unique<BitmapSubtitleDecoder>(d->codec, d->has_palette ? d->palette : nullptr,
+                                                                static_cast<int>(d->canvas_width),
+                                                                static_cast<int>(d->canvas_height));
         if (d->codec == fourcc('s', 's', 'a', ' ') && d->extra && d->extra_size) {
             size_t n = d->extra_size;
             while (n > 0 && d->extra[n - 1] == 0) --n;
@@ -499,15 +506,23 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
     if (s->cat == WNK_ES_SUBTITLE) {
         const int64_t t = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
         if (t == WNK_BRIDGE_NO_TIME) return 0;
-        auto cue = text_subtitle_cue(s->codec, data, size, s->encoding.empty() ? nullptr : s->encoding.c_str(),
-                                     s->es_id, t - self->base_us_, length);
-        if (!cue) return 0;
-        Item item;
-        item.stream = s;
-        item.pts = cue->start_us;
-        item.cue = std::move(cue);
-        self->queue_.push_back(std::move(item));
-        self->cv_.notify_all();
+        std::vector<std::shared_ptr<const media::SubtitleCue>> cues;
+        if (s->bitmap) {
+            if (self->video_ != nullptr)
+                s->bitmap->set_video_size(static_cast<int>(self->video_->width), static_cast<int>(self->video_->height));
+            cues = s->bitmap->decode(data, size, s->es_id, t - self->base_us_);
+        } else if (auto cue = text_subtitle_cue(s->codec, data, size, s->encoding.empty() ? nullptr : s->encoding.c_str(),
+                                                s->es_id, t - self->base_us_, length)) {
+            cues.push_back(std::move(cue));
+        }
+        for (auto &cue : cues) {
+            Item item;
+            item.stream = s;
+            item.pts = cue->start_us;
+            item.cue = std::move(cue);
+            self->queue_.push_back(std::move(item));
+        }
+        if (!cues.empty()) self->cv_.notify_all();
         return 0;
     }
 
