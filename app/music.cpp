@@ -101,7 +101,14 @@ std::vector<size_t> tag_order(const std::vector<TrackTags> &tags) {
 }
 
 #if VPLAYER_HAVE_LIBVLC
-std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths) {
+std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc) {
+    if (vlc == nullptr) return nullptr;
+    libvlc_retain(vlc);
+    return std::shared_ptr<libvlc_instance_t>(vlc, [](libvlc_instance_t *v) { libvlc_release(v); });
+}
+
+std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths,
+                                 const std::function<bool()> &stop) {
     std::vector<TrackTags> out(paths.size());
     if (vlc == nullptr) return out;
     auto meta = [](libvlc_media_t *m, libvlc_meta_t k) {
@@ -111,10 +118,11 @@ std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::
         return s;
     };
     for (size_t i = 0; i < paths.size(); ++i) {
+        if (stop && stop()) break;
         libvlc_media_t *m = libvlc_media_new_path(vlc, paths[i].c_str());
         if (m == nullptr) continue;
         libvlc_media_parse_with_options(m, libvlc_media_parse_local, 2000);
-        for (int k = 0; k < 220 && libvlc_media_get_parsed_status(m) == 0; ++k)
+        for (int k = 0; k < 220 && libvlc_media_get_parsed_status(m) == 0 && !(stop && stop()); ++k)
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         TrackTags &t = out[i];
         t.title = meta(m, libvlc_meta_Title);
@@ -130,7 +138,10 @@ std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::
     return out;
 }
 #else
-std::vector<TrackTags> read_tags(libvlc_instance_t *, const std::vector<std::string> &paths) {
+std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *) { return nullptr; }
+
+std::vector<TrackTags> read_tags(libvlc_instance_t *, const std::vector<std::string> &paths,
+                                 const std::function<bool()> &) {
     return std::vector<TrackTags>(paths.size());
 }
 #endif

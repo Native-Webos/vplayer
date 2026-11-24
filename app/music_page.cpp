@@ -205,7 +205,9 @@ void MusicPage::show_album(Ui &ui, size_t index) {
         const int which = album_;
         wnk::async::run_then_post<std::vector<TrackTags>>(
             s_.ctx->pool(), s_.ctx->dispatcher(), lifetime_.weak(), wnk::async::CancellationToken{},
-            [vlc = s_.vlc, paths](const wnk::async::CancellationToken &) { return read_tags(vlc, paths); },
+            [vlc = hold_vlc(s_.vlc), paths](const wnk::async::CancellationToken &cancel) {
+                return read_tags(vlc.get(), paths, [&cancel] { return cancel.cancelled(); });
+            },
             [this, which](std::vector<TrackTags> tags) {
                 if (album_ != which || tags.size() != tags_.size()) return;  // another album meanwhile
                 tags_ = std::move(tags);

@@ -9,6 +9,8 @@
 #include "wnk/platform/files.hpp"
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 
 struct libvlc_instance_t;
@@ -38,9 +40,13 @@ struct TrackTags {
     int number = 0;
     int64_t duration_ms = 0;
 };
-// Reads the tags of `paths` with libVLC (local files, ~2 s at most each). Blocking: a worker.
-// Builds without libVLC give empty tags.
-std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths);
+// A reference of its own to the libVLC instance (libvlc_retain), so work on a worker outlives the
+// app's (which releases it when stopping). Take it on the main thread. Null for null.
+std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc);
+// Reads the tags of `paths` with libVLC (local files, ~2 s at most each). Blocking: a worker; stops
+// early (empty tags after) when `stop` returns true. Builds without libVLC give empty tags.
+std::vector<TrackTags> read_tags(libvlc_instance_t *vlc, const std::vector<std::string> &paths,
+                                 const std::function<bool()> &stop = {});
 // The tracks in tag order when every track has a number, else as they are (indexes into tags).
 std::vector<size_t> tag_order(const std::vector<TrackTags> &tags);
 
