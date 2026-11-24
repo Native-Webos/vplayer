@@ -197,6 +197,27 @@ class VlcPlayback final : public Playback {
     void set_rate(float r) override {
         if (mp_) libvlc_media_player_set_rate(mp_, r);
     }
+    std::vector<Title> titles() const override {
+        std::vector<Title> out;
+        if (!mp_) return out;
+        libvlc_title_description_t **d = nullptr;
+        const int n = libvlc_media_player_get_full_title_descriptions(mp_, &d);
+        for (int i = 0; i < n; ++i) {
+            Title t;
+            t.length_ms = d[i]->i_duration;
+            t.menu = (d[i]->i_flags & libvlc_title_menu) != 0;
+            t.name = d[i]->psz_name && *d[i]->psz_name ? d[i]->psz_name : (t.menu ? "Menu" : "Title " + std::to_string(i + 1));
+            out.push_back(std::move(t));
+        }
+        if (n > 0) libvlc_title_descriptions_release(d, static_cast<unsigned>(n));
+        if (out.size() < 2) out.clear();  // a plain file: one title, nothing to choose
+        return out;
+    }
+    int title() const override { return mp_ ? libvlc_media_player_get_title(mp_) : -1; }
+    void set_title(int t) override {
+        if (mp_) libvlc_media_player_set_title(mp_, t);
+    }
+
     std::vector<Chapter> chapters() const override {
         std::vector<Chapter> out;
         if (!mp_) return out;

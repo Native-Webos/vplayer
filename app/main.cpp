@@ -244,16 +244,24 @@ class App : public wnk::app::Delegate {
     std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e, bool software) {
         const bool audio_only = e.kind == wnk::platform::FileKind::Audio;
         const bool hw = engine_ && hw_available_ && !software && !audio_only && decoder_ != "software";
+        // Disc images start at the main film, not at the disc's menu, which the remote cannot
+        // navigate (the panel's Titles list reaches the extras).
+        auto base = vlc_options_;
+        const std::string ext = vplayer::extension_upper(e.name);
+        if (ext == "ISO" || ext == "IMG") {
+            base.push_back(":no-bluray-menu");
+            base.push_back(":no-dvdnav-menu");
+        }
         if (hw) {
             WNK_LOGI(kCat, "engine: hardware (TV decoder) for %s", e.name.c_str());
-            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw_, vlc_options_);
+            return vplayer::open_hw_playback(engine_->instance(), e.path, services_.ctx->dispatcher(), hw_, base);
         }
         if (engine_) {
             WNK_LOGI(kCat, "engine: software (libVLC) for %s", e.name.c_str());
             // Settings → subtitle size and box, as VLC's text renderer options for this file (its
             // relative size divides the picture height: 12 is the engine's normal).
             static const int rel[] = {16, 12, 9, 7};
-            auto options = vlc_options_;
+            auto options = base;
             options.push_back(":freetype-rel-fontsize=" + std::to_string(rel[std::clamp(settings_.subtitle_size, 0, 3)]));
             if (settings_.subtitle_box) options.push_back(":freetype-background-opacity=160");
             return vplayer::open_vlc_playback(engine_->instance(), e.path, options);

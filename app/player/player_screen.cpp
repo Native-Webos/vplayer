@@ -540,6 +540,25 @@ class PlayerPanel : public View {
             s.sleep_left_s = kSleepMinutes[i] > 0 ? kSleepMinutes[i] * 60.0f : 0;
             ui.toast(i == 0 ? "Sleep timer off" : "The player stops after " + kSleepNames[static_cast<size_t>(i)]);
         });
+        const auto titles = p.titles();
+        if (!titles.empty()) {
+            section("TITLES");
+            // The longest non-menu title is the main film.
+            size_t main = titles.size();
+            for (size_t k = 0; k < titles.size(); ++k)
+                if (!titles[k].menu && (main == titles.size() || titles[k].length_ms > titles[main].length_ms)) main = k;
+            const int cur = p.title();
+            for (size_t k = 0; k < titles.size(); ++k) {
+                std::string detail = titles[k].length_ms > 0 ? clock_text(titles[k].length_ms) : std::string();
+                if (k == main) detail = "Main film · " + detail;
+                rows_->add<OptionRow>(titles[k].name, static_cast<int>(k) == cur,
+                                      [this, k](Ui &ui) {
+                                          screen_.playback()->set_title(static_cast<int>(k));
+                                          refresh(ui);
+                                      },
+                                      detail);
+            }
+        }
         const auto chapters = p.chapters();
         if (!chapters.empty()) {
             section("CHAPTERS");

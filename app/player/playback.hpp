@@ -82,6 +82,13 @@ struct Chapter {
     int64_t start_ms = 0;
 };
 
+// A title of a disc (DVD, Blu-ray): the film, extras, menus.
+struct Title {
+    std::string name;
+    int64_t length_ms = 0;
+    bool menu = false;
+};
+
 // Picture adjustments (VLC's "adjust" filter). Neutral values: 1, 1, 1, 1, 0.
 struct PictureAdjust {
     bool enabled = false;
@@ -156,6 +163,10 @@ class Playback {
     virtual bool can_change_rate() const { return true; }
     virtual void set_rate(float) {}
     virtual std::vector<Chapter> chapters() const { return {}; }
+    // Discs: their titles (empty for files with only one), the current one, switching.
+    virtual std::vector<Title> titles() const { return {}; }
+    virtual int title() const { return -1; }
+    virtual void set_title(int) {}
     virtual int chapter() const { return -1; }
     virtual void set_chapter(int) {}
 
