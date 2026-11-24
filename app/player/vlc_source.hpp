@@ -181,6 +181,7 @@ class VlcSource final : public wnk::media::MediaSource {
     int stray_id_ = -1;     // a wanted kind offered under another id (mu_); see on_add
     // Closed captions (mu_): found, being drawn, and the access units' pairs reordered by time.
     bool cc_seen_ = false, cc_on_ = false;
+    int cc_cues_ = 0;  // made since captions were turned on (the first is logged)
     int cc_checked_ = 0;
     std::unique_ptr<Cea608Decoder> cc_;
     std::map<int64_t, std::vector<std::pair<uint8_t, uint8_t>>> cc_reorder_;

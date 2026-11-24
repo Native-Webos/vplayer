@@ -188,11 +188,10 @@ bool VlcSource::has_closed_captions() const {
 }
 
 void VlcSource::set_closed_captions(bool on) {
+    // Decoding runs whether chosen or not (see on_send): this only notes the choice.
     std::lock_guard<std::mutex> lock(mu_);
-    if (on && !cc_) cc_ = std::make_unique<Cea608Decoder>(kClosedCaptionsTrack);
-    if (on && !cc_on_ && cc_) cc_->reset();
+    if (on != cc_on_) WNK_LOGI(kCat, "closed captions %s (%d decoded so far)", on ? "on" : "off", cc_cues_);
     cc_on_ = on;
-    cc_reorder_.clear();
 }
 
 std::vector<media::FontAttachment> VlcSource::fonts() const {
@@ -714,22 +713,26 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
         if (when != WNK_BRIDGE_NO_TIME && when < self->audio_from_us_) return 0;
         self->audio_from_us_ = kNoTime;
     }
-    // Closed captions in H.264/HEVC SEI: looked for in the first packets, decoded while chosen.
+    // Closed captions in H.264/HEVC SEI: looked for in the first packets, then always decoded once
+    // found. Packets are read well ahead of playback, so captions decoded only once chosen would miss
+    // what is already read; the controller keeps the cues and shows them when the track is chosen.
     if (s == self->video_ && (s->id == CodecId::H264 || s->id == CodecId::Hevc) &&
-        (self->cc_on_ || (!self->cc_seen_ && self->cc_checked_ < 300))) {
+        (self->cc_seen_ || self->cc_checked_ < 300)) {
         auto pairs = cc608_pairs(data, size, s->id == CodecId::Hevc);
         ++self->cc_checked_;
         if (!pairs.empty() && !self->cc_seen_) {
             self->cc_seen_ = true;
+            if (!self->cc_) self->cc_ = std::make_unique<Cea608Decoder>(kClosedCaptionsTrack);
             WNK_LOGI(kCat, "closed captions (CEA-608) in the video");
         }
-        if (self->cc_on_ && pts != WNK_BRIDGE_NO_TIME) {
+        if (self->cc_seen_ && pts != WNK_BRIDGE_NO_TIME) {
             // Decode order to presentation order: B-frames come before the pictures they follow.
             self->cc_reorder_[pts] = std::move(pairs);
             while (self->cc_reorder_.size() > 8) {
                 const auto first = self->cc_reorder_.begin();
                 for (const auto &p : first->second) {
                     for (auto &cue : self->cc_->feed(p.first, p.second, first->first)) {
+                        ++self->cc_cues_;
                         Item ci;
                         ci.stream = s;
                         ci.pts = cue->start_us;
