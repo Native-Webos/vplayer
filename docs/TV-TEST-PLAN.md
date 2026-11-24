@@ -121,7 +121,8 @@ how to test it, what should happen, and what the log shows.
 | 7b.15 | Audio: Equalizer "Rock", on the TV decoder path | A toast, the file reopens at the same spot (1-2 s), the sound changes; the panel says the TV gets PCM |
 | 7b.16 | Audio: Volume boost 200 %, Normalise loudness, Wider stereo (TV decoder, then software path) | Each audible; software path: equalizer and volume change without a reopen |
 | 7b.17 | Audio effects back to Off / 100 % on a TrueHD or Atmos file | Passthrough (or the TV's decoding) again after the reopen |
-| 7b.18 | A US broadcast recording (ATSC .ts, or an H.264 file with A/53 captions) | Subtitles list "Closed captions (CC1)"; chosen: pop-on lines appear in sync and clear; roll-up lines scroll |
+| 7b.18 | An H.264 recording with A/53 captions (US cable/streaming capture) on the TV decoder | Subtitles list "Closed captions (CC1)"; chosen: pop-on lines appear in sync and clear; roll-up lines scroll |
+| 7b.18b | An MPEG-2 ATSC .ts (over-the-air) | Plays on the software path (the TV decoder path takes no MPEG-2); VLC's own "Closed captions 1" track |
 | 7b.19 | Captions on, then seek | No stale lines after the seek; captions resume within a few seconds |
 
 ## 8. Software path (frame drops, RESEARCH.md §10)
