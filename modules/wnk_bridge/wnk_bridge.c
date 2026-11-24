@@ -143,6 +143,14 @@ static sout_stream_id_sys_t *Add(sout_stream_t *p_stream, const es_format_t *p_f
         d.rate = p_fmt->audio.i_rate;
         d.channels = p_fmt->audio.i_channels;
         d.bits_per_sample = p_fmt->audio.i_bitspersample;
+    } else {
+        d.encoding = p_fmt->subs.psz_encoding;
+        d.canvas_width = p_fmt->subs.spu.i_original_frame_width > 0 ? (unsigned)p_fmt->subs.spu.i_original_frame_width : 0;
+        d.canvas_height = p_fmt->subs.spu.i_original_frame_height > 0 ? (unsigned)p_fmt->subs.spu.i_original_frame_height : 0;
+        if (p_fmt->subs.spu.palette[0] == SPU_PALETTE_DEFINED) {
+            d.has_palette = 1;
+            memcpy(d.palette, &p_fmt->subs.spu.palette[1], sizeof d.palette);
+        }
     }
 
     void *id = sink->add(sink->opaque, &d);

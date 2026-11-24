@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define WNK_BRIDGE_ABI 1
+#define WNK_BRIDGE_ABI 2
 
 /* Timestamps are microseconds of stream time; WNK_BRIDGE_NO_TIME when unknown. */
 #define WNK_BRIDGE_NO_TIME INT64_MIN
@@ -66,6 +66,12 @@ typedef struct wnk_es_desc {
 
     /* audio */
     unsigned rate, channels, bits_per_sample;
+
+    /* subtitles (ABI 2) */
+    const char *encoding;                 /* text: the character set if the demuxer knows it ("UTF-8"), else NULL */
+    unsigned canvas_width, canvas_height; /* bitmaps: the frame the subtitle was authored on, 0 if unknown */
+    int has_palette;                      /* DVD: the 16-colour YUV palette (0x00YYUuVv... as VLC holds it) */
+    uint32_t palette[16];
 } wnk_es_desc;
 
 typedef struct wnk_bridge_sink {
