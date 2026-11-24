@@ -76,7 +76,7 @@ release and date.
 - [ ] DVB and teletext subtitles on the hardware path
 - [ ] SubRip `{\an8}` (top) placement on the hardware path
 - [ ] Speed on the hardware path: time-stretched audio from VLC (tempo filter in `#transcode`)
-- [ ] Chapters on the hardware path
+- [x] Chapters on the hardware path: listed from libVLC, chosen through the controller's seek; on the TV 2026-11-24
 - [x] Dolby Vision declared to Starfish (RESEARCH.md §14): configuration record from MKV/MP4, or RPUs in
       the first keyframe; Profile 7 fed as 8.1. On the TV 2026-11-24
 - [x] Seek precision: lands on the keyframe at or before the target (was up to 9 s early)
