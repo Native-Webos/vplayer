@@ -566,8 +566,18 @@ void *VlcSource::on_add(void *opaque, const wnk_es_desc *d) {
     // The wanted kind offered under another id before ours came: the parse and the playback number
     // streams differently. Say so at once rather than waiting for streams that will not come.
     const bool video = d->cat == WNK_ES_VIDEO;
-    const int want = video ? self->want_video_ : self->want_audio_;
+    int want = video ? self->want_video_ : self->want_audio_;
     const bool have = video ? self->video_ != nullptr : self->audio_ != nullptr;
+    // The only track of its kind in the parse: no other it could be, whatever VLC numbers it
+    // (adaptive streams such as HLS number their streams their own way when playing).
+    const auto kind = video ? media::TrackType::Video : media::TrackType::Audio;
+    const bool only = want >= 0 && std::count_if(self->info_.tracks.begin(), self->info_.tracks.end(),
+                                                 [kind](const media::TrackInfo &t) { return t.type == kind; }) == 1;
+    if (only && !have && d->es_id != want) {
+        WNK_LOGI(kCat, "%s stream %d taken for track %d (the only one)", video ? "video" : "audio", d->es_id, want);
+        want = d->es_id;
+        (video ? self->want_video_ : self->want_audio_) = want;
+    }
     if (want >= 0 && !have && d->es_id != want && self->stray_id_ < 0) {
         WNK_LOGW(kCat, "%s stream %d offered, %d wanted", video ? "video" : "audio", d->es_id, want);
         self->stray_id_ = d->es_id;
