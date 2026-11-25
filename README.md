@@ -50,6 +50,15 @@ Not affiliated with VideoLAN. "VLC" is a VideoLAN trademark.
 - Tested on an LG OLED65C1 (webOS 6.5.3), see [docs/TV-TEST-PLAN.md](docs/TV-TEST-PLAN.md); the
   package loads on webOS 5.3 to 11.2
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Home](app/packaging/screenshots/home.jpg)<br>Home | ![Playback](app/packaging/screenshots/player.jpg)<br>Playback |
+| ![Audio: tracks, delay and effects](app/packaging/screenshots/audio-panel.jpg)<br>Audio: tracks, delay and effects | ![Picture: aspect, crop, zoom, rotate](app/packaging/screenshots/picture-panel.jpg)<br>Picture: aspect, crop, zoom, rotate |
+| ![A USB folder](app/packaging/screenshots/browse.jpg)<br>A USB folder | ![Music](app/packaging/screenshots/music.jpg)<br>Music |
+| ![Network shares and streams](app/packaging/screenshots/network.jpg)<br>Network shares and streams | ![Settings](app/packaging/screenshots/settings.jpg)<br>Settings |
+
 ## Layout
 
 | Path | What |
