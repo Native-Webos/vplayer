@@ -42,6 +42,10 @@ std::string loggable(const std::string &text);
 // app's (which releases it when stopping). Take it on the main thread. Null for null.
 std::shared_ptr<libvlc_instance_t> hold_vlc(libvlc_instance_t *vlc);
 
+// VLC modules whose debug messages go to the event log too ("dvdnav", "main"), for diagnosis;
+// empty: none (the default).
+void set_vlc_debug_modules(std::vector<std::string> modules);
+
 class VlcEngine {
  public:
     // app_dir: the directory holding the executable (LaunchInfo::app_dir). `store`: where VLC's saved

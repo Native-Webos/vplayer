@@ -403,6 +403,13 @@ class App : public wnk::app::Delegate {
             for (const auto &o : *it)
                 if (o.is_string()) vlc_options_.push_back(o.get<std::string>());
         }
+        // {"vlcDebug": ["dvdnav", "main"]}: those VLC modules' debug messages into the event log.
+        if (auto it = j.find("vlcDebug"); it != j.end() && it->is_array()) {
+            std::vector<std::string> modules;
+            for (const auto &m : *it)
+                if (m.is_string()) modules.push_back(m.get<std::string>());
+            vplayer::set_vlc_debug_modules(std::move(modules));
+        }
         // {"at": seconds}: start the "play" file there.
         if (auto it = j.find("at"); it != j.end() && it->is_number()) pending_at_ms_ = static_cast<int64_t>(it->get<double>() * 1000);
         // {"decoder": "software" | "hardware"}: force an engine for the next plays (testing).

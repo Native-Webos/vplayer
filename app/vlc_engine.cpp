@@ -3,7 +3,12 @@
 
 #include "wnk/log.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <cstdlib>
+#include <mutex>
+#include <string>
+#include <vector>
 
 #if VPLAYER_HAVE_LIBVLC
 #include <vlc/vlc.h>
@@ -56,22 +61,38 @@ std::string file_uri(const std::string &path) {
     return out;
 }
 
+namespace {
+std::mutex g_debug_mu;
+std::vector<std::string> g_debug_modules;  // g_debug_mu
+std::atomic<bool> g_debug_any{false};
+}  // namespace
+
+void set_vlc_debug_modules(std::vector<std::string> modules) {
+    std::lock_guard<std::mutex> lock(g_debug_mu);
+    g_debug_modules = std::move(modules);
+    g_debug_any = !g_debug_modules.empty();
+}
+
 #if VPLAYER_HAVE_LIBVLC
 
 namespace {
 
-// libVLC's log, into the app's event log. Debug lines are dropped: with ~300 modules probing they
-// are thousands per file opened.
+// libVLC's log, into the app's event log. Debug lines are dropped (with ~300 modules probing they
+// are thousands per file opened), except the modules set_vlc_debug_modules names.
 void on_vlc_log(void *, int level, const libvlc_log_t *ctx, const char *fmt, va_list args) {
-    if (level < LIBVLC_NOTICE) return;
+    const char *module = nullptr, *file = nullptr;
+    unsigned line = 0;
+    libvlc_log_get_context(ctx, &module, &file, &line);
+    if (level < LIBVLC_NOTICE) {
+        if (!g_debug_any || module == nullptr) return;
+        std::lock_guard<std::mutex> lock(g_debug_mu);
+        if (std::find(g_debug_modules.begin(), g_debug_modules.end(), module) == g_debug_modules.end()) return;
+    }
     char msg[1024];
     va_list copy;
     va_copy(copy, args);
     std::vsnprintf(msg, sizeof msg, fmt, copy);
     va_end(copy);
-    const char *module = nullptr, *file = nullptr;
-    unsigned line = 0;
-    libvlc_log_get_context(ctx, &module, &file, &line);
     if (level >= LIBVLC_ERROR) {
         WNK_LOGE(kCat, "[%s] %s", module ? module : "?", msg);
     } else if (level >= LIBVLC_WARNING) {
