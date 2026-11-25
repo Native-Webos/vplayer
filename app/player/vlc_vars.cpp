@@ -24,6 +24,12 @@ bool set_player_option(libvlc_media_player_t *mp, const char *name, float value)
     if (var_Type(obj, name) == 0 && var_Create(obj, name, VLC_VAR_FLOAT) != VLC_SUCCESS) return false;
     return var_SetFloat(obj, name, value) == VLC_SUCCESS;
 }
+bool set_player_address(libvlc_media_player_t *mp, const char *name, void *value) {
+    if (mp == nullptr) return false;
+    vlc_object_t *obj = reinterpret_cast<vlc_object_t *>(mp);
+    if (var_Type(obj, name) == 0 && var_Create(obj, name, VLC_VAR_ADDRESS) != VLC_SUCCESS) return false;
+    return var_SetAddress(obj, name, value) == VLC_SUCCESS;
+}
 libvlc_equalizer_t *make_equalizer(const AudioEffects &fx) {
     if (fx.equalizer < 0) return nullptr;
     if (fx.equalizer != AudioEffects::kCustomEqualizer)
@@ -39,6 +45,7 @@ libvlc_equalizer_t *make_equalizer(const AudioEffects &fx) {
 libvlc_equalizer_t *make_equalizer(const AudioEffects &) { return nullptr; }
 bool set_player_audio_filters(libvlc_media_player_t *, const std::string &) { return false; }
 bool set_player_option(libvlc_media_player_t *, const char *, float) { return false; }
+bool set_player_address(libvlc_media_player_t *, const char *, void *) { return false; }
 #endif
 
 }  // namespace vplayer

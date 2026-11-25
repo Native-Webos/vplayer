@@ -95,6 +95,10 @@ class VlcPlayback final : public Playback {
         }
         libvlc_video_set_callbacks(mp_, &VlcPlayback::lock_cb, &VlcPlayback::unlock_cb, &VlcPlayback::display_cb, this);
         libvlc_video_set_format_callbacks(mp_, &VlcPlayback::setup_cb, &VlcPlayback::cleanup_cb);
+        // The picture's aspect as the video output has it: a DVD's tracks say nothing, and its menu
+        // and film differ.
+        if (!set_player_address(mp_, "vmem-sar", reinterpret_cast<void *>(&VlcPlayback::sar_cb)))
+            WNK_LOGW(kCat, "vmem-sar not set");
         // The audio effects before play: the audio output takes the player's filters when it is made.
         if (effects.volume != 100) libvlc_audio_set_volume(mp_, std::clamp(effects.volume, 0, 200));
         if (effects.equalizer >= 0) apply_equalizer(effects);
@@ -369,7 +373,7 @@ class VlcPlayback final : public Playback {
             std::snprintf(buf, sizeof buf, "%s %u×%u · software", codec_name(t->i_codec).c_str(), t->video->i_width,
                           t->video->i_height);
             describe_ = buf;
-            sink_->set_sar(static_cast<int>(t->video->i_sar_num), static_cast<int>(t->video->i_sar_den));
+            if (!sar_reported_) sink_->set_sar(static_cast<int>(t->video->i_sar_num), static_cast<int>(t->video->i_sar_den));
             sink_->set_visible_size(static_cast<int>(t->video->i_width), static_cast<int>(t->video->i_height));
             break;
         }
@@ -420,6 +424,12 @@ class VlcPlayback final : public Playback {
         return 3;
     }
     static void cleanup_cb(void *) {}
+    static void sar_cb(void *opaque, unsigned num, unsigned den) {
+        auto *self = static_cast<VlcPlayback *>(opaque);
+        self->sar_reported_ = true;
+        self->sink_->set_sar(static_cast<int>(num), static_cast<int>(den));
+        WNK_LOGI(kCat, "vlc: sample aspect %u:%u", num, den);
+    }
     static void *lock_cb(void *opaque, void **planes) {
         auto *self = static_cast<VlcPlayback *>(opaque);
         uint8_t *p[3];
@@ -456,6 +466,7 @@ class VlcPlayback final : public Playback {
     // with libVLC's own statistics every 5 seconds while playing.
     std::atomic<int64_t> last_display_us_{0}, max_gap_us_{0};
     std::atomic<int64_t> locked_us_{0}, held_us_{0}, held_max_us_{0};
+    std::atomic<bool> sar_reported_{false};  // vmem-sar called: the tracks' aspect is not needed
     std::atomic<int> displayed_{0};
     std::chrono::steady_clock::time_point next_report_{};
     int last_lost_ = 0, last_shown_ = 0;
