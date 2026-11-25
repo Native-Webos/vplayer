@@ -71,6 +71,7 @@ Then the rest of the sections as time allows.
 | Regression: DV Profile 7 TrueHD, skips | Pass; skips now use the kit's splice (the decoder's clock runs on; the shown time is right) |
 | 3.1, 3.2 DLNA (test server: `app/tools/net-test/run.sh`) | Pass: "VPlayer test · DLNA media server" found; its folders browse (All Video: 15 files); a video plays on the TV decoder in 0.7 s |
 | 3.8 FTP | Pass: plays on the TV decoder; a skip lands where asked |
+| 7b.6 DVD menus (test DVD) | Pass after three fixes: square pixels on the software path (aspect from VLC's output, patch 0008); the menu chosen from Titles early in a title ended the playback (libdvdnav, patch 0009); with menus off the disc still went to its menu (the main film now starts). The menu's highlight moves with the arrows, OK plays, titles return to the menu; film 25 fps, 0 lost. Blu-ray: no test image yet |
 | 3.8 SFTP (stock OpenSSH 10) | Pass after two fixes: opening one ended the app (libgcrypt found no /dev/random in the app's jail: patch 0006), then every current server refused VLC's old key exchanges (libssh2 now on OpenSSL: patch 0007). First frame 2.4 s, skips land |
 
 Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on
@@ -168,7 +169,7 @@ Continue watching) are done.
 | 7b.3 | Video tab → aspect 4:3, 16:9, Stretch, Fill; zoom 150 % on the TV decoder | The picture's area changes; Fill and zoom past the edges (check Starfish accepts it) |
 | 7b.4 | Playback → Jump to time "0:30", "95", "1:75" | Jumps; the last says it is not a time |
 | 7b.5 | Playback → Add a bookmark here, twice at different places; restart the app | Both bookmarks listed and jump there |
-| 7b.6 | A DVD ISO and a Blu-ray ISO | Start at the main film, not the menu; Playback → Titles lists the rest (software path) |
+| 7b.6 | A DVD ISO (`tools/test-media/make_dvd.sh`) and a Blu-ray ISO | Starts at the disc's menu (software path): arrows and OK choose, Back shows the controls; Playback → Titles has "DVD Menu" and the titles; with Settings → Disc menus off, the main film starts at once |
 | 7b.7 | Top bar → search, type part of a file name with the remote's keyboard | Results as you type; one plays |
 | 7b.8 | Audio delay +0.5 s on the TV decoder (two-audio.mkv) | Audio comes later after a second or two; no stall | 
 | 7b.9 | Settings → Audio to the TV: Always decoded, play thd-20s.mkv | Info: "To the TV … pcm"; plays |
@@ -217,7 +218,7 @@ Continue watching) are done.
 
 ## Not built yet
 
-- Teletext pages as a viewer (subtitle pages only); CEA-708 captions (608 only: CC1).
+- Teletext pages as a viewer (subtitle pages only).
 - SMB1 shares and NetBIOS discovery (libdsm does not build against glibc 2.12).
 - Reading Dolby Vision configuration records and attached fonts from network files (local files
   only; the Dolby Vision RPU scan works for network files).
