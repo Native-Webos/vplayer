@@ -99,12 +99,28 @@ struct AudioEffects {
     int volume = 100;        // percent, up to 200
     bool normalize = false;  // VLC's normvol: steadier loudness
     bool widen = false;      // VLC's stereo_widen
-    bool active() const { return equalizer >= 0 || volume != 100 || normalize || widen; }
+    bool compressor = false;   // VLC's compressor: loud and quiet parts closer
+    bool spatializer = false;  // VLC's spatializer: room sound
+    int pitch = 0;             // semitones, -12..12 (VLC's scaletempo_pitch)
+    bool active() const { return equalizer >= 0 || volume != 100 || !filter_chain().empty(); }
+    // The filters these settings need besides the equalizer and the volume, ':' between them, in
+    // VLC's names; set when the audio starts (a change reopens).
+    std::string filter_chain() const {
+        std::string out;
+        auto add = [&out](const char *f) { out += (out.empty() ? "" : ":") + std::string(f); };
+        if (normalize) add("normvol");
+        if (widen) add("stereo_widen");
+        if (compressor) add("compressor");
+        if (spatializer) add("spatializer");
+        if (pitch != 0) add("scaletempo_pitch");
+        return out;
+    }
     bool same_equalizer(const AudioEffects &o) const {
         return equalizer == o.equalizer && (equalizer != kCustomEqualizer || bands == o.bands);
     }
     bool operator==(const AudioEffects &o) const {
-        return same_equalizer(o) && volume == o.volume && normalize == o.normalize && widen == o.widen;
+        return same_equalizer(o) && volume == o.volume && normalize == o.normalize && widen == o.widen &&
+               compressor == o.compressor && spatializer == o.spatializer && pitch == o.pitch;
     }
     bool operator!=(const AudioEffects &o) const { return !(*this == o); }
 };

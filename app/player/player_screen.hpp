@@ -47,6 +47,8 @@ struct PlayerSettings {
     int volume = 100;            // percent, up to 200
     bool normalize = false;      // steadier loudness (VLC's normvol)
     bool widen = false;          // wider stereo (VLC's stereo_widen)
+    bool compressor = false, spatializer = false;
+    int pitch = 0;               // semitones
     AudioEffects effects() const {
         AudioEffects fx;
         fx.equalizer = equalizer;
@@ -54,6 +56,9 @@ struct PlayerSettings {
         fx.volume = volume;
         fx.normalize = normalize;
         fx.widen = widen;
+        fx.compressor = compressor;
+        fx.spatializer = spatializer;
+        fx.pitch = pitch;
         return fx;
     }
     AspectMode aspect = AspectMode::Fit;

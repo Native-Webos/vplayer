@@ -379,8 +379,7 @@ std::string VlcSource::sout_chain() const {
         std::string filters;
         auto add = [&filters](const char *f) { filters += (filters.empty() ? "" : ":") + std::string(f); };
         if (effects_.equalizer >= 0) add("equalizer");
-        if (effects_.normalize) add("normvol");
-        if (effects_.widen) add("stereo_widen");
+        if (const std::string chain = effects_.filter_chain(); !chain.empty()) add(chain.c_str());
         if (effects_.volume != 100) add("gain");
         return "#transcode{acodec=s16l,channels=" + std::to_string(pcm_channels_) +
                ",samplerate=" + std::to_string(pcm_rate_) + (filters.empty() ? "" : ",afilter=\"" + filters + "\"") + "}:" + sink;
@@ -553,6 +552,8 @@ bool VlcSource::start_player(std::string *error) {
     }
     if (mp != nullptr && effects_.volume != 100 && !set_player_option(mp, "gain-value", effects_.volume / 100.0f))
         WNK_LOGW(kCat, "gain not set");
+    if (mp != nullptr && effects_.pitch != 0 && !set_player_option(mp, "pitch-shift", static_cast<float>(effects_.pitch)))
+        WNK_LOGW(kCat, "pitch not set");
     {
         std::lock_guard<std::mutex> lock(player_mu_);
         mp_ = mp;

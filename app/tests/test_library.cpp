@@ -4,6 +4,7 @@
 #include "wnk_test.hpp"
 
 #include "library.hpp"
+#include "player/playback.hpp"
 
 using namespace vplayer;
 
@@ -56,4 +57,19 @@ TEST("disc folders and images") {
     folder.kind = FileKind::Video;
     CHECK(vplayer::is_disc(folder));
     CHECK(!vplayer::is_disc(other));
+}
+
+TEST("audio effects: the filters they need") {
+    vplayer::AudioEffects fx;
+    CHECK(fx.filter_chain().empty());
+    CHECK(!fx.active());
+    fx.compressor = true;
+    fx.pitch = -3;
+    CHECK_EQ(fx.filter_chain(), std::string("compressor:scaletempo_pitch"));
+    fx.normalize = fx.spatializer = true;
+    CHECK_EQ(fx.filter_chain(), std::string("normvol:compressor:spatializer:scaletempo_pitch"));
+    CHECK(fx.active());
+    vplayer::AudioEffects other = fx;
+    other.pitch = 2;
+    CHECK(other != fx);
 }

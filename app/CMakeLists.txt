@@ -119,7 +119,7 @@ if (NOT WNK_WEBOS)
     add_test(NAME unit.vplayer.music COMMAND test_music)
     add_executable(test_library tests/test_library.cpp library.cpp)
     target_include_directories(test_library PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_kit}/tests/unit")
-    target_link_libraries(test_library PRIVATE wnk_platform)
+    target_link_libraries(test_library PRIVATE wnk_platform wnk_media)  # wnk_media: player/playback.hpp
     add_test(NAME unit.vplayer.library COMMAND test_library)
     # search.cpp's matcher only; the screen needs the whole app.
     add_executable(test_search tests/test_search.cpp search.cpp library.cpp network.cpp history.cpp app_settings.cpp ui/theme.cpp)

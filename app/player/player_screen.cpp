@@ -382,6 +382,22 @@ class PlayerPanel : public View {
             screen_.settings().widen = on;
             screen_.apply_effects(ui);
         });
+        rows_->add<Toggle>("Compressor", st.compressor, [this](Ui &ui, bool on) {
+            screen_.settings().compressor = on;
+            screen_.apply_effects(ui);
+        }).set_description("Quiet and loud parts closer together");
+        rows_->add<Toggle>("Spatializer", st.spatializer, [this](Ui &ui, bool on) {
+            screen_.settings().spatializer = on;
+            screen_.apply_effects(ui);
+        }).set_description("The sound of a room");
+        auto &pitch = rows_->add<Slider>("Pitch", -12, 12, 1, static_cast<float>(st.pitch), [this](Ui &ui, float v) {
+            screen_.settings().pitch = static_cast<int>(std::lround(v));
+            screen_.apply_effects(ui);
+        });
+        pitch.set_format([](float v) {
+            const int n = static_cast<int>(std::lround(v));
+            return n == 0 ? std::string("Unchanged") : (n > 0 ? "+" : "") + std::to_string(n) + " semitones";
+        });
         if (p.video_plane() && st.effects().active())
             rows_->add<ValueRow>("With effects on", "the TV gets decoded stereo PCM", [](Ui &) {});
     }
