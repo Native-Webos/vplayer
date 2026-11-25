@@ -7,6 +7,8 @@
 #include <vlc/vlc.h>
 #include <vlc_common.h>
 #include <vlc_variables.h>
+
+#include <cstring>
 #endif
 
 namespace vplayer {
@@ -15,7 +17,17 @@ namespace vplayer {
 bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filters) {
     if (mp == nullptr) return false;
     vlc_object_t *obj = reinterpret_cast<vlc_object_t *>(mp);
-    return var_SetString(obj, "audio-filter", filters.c_str()) == VLC_SUCCESS;
+    if (var_SetString(obj, "audio-filter", filters.c_str()) != VLC_SUCCESS) return false;
+    // VLC 3 makes the player's audio output with the player (lib/media_player.c), and the output
+    // copied the filter list then: set it there too, as libvlc_media_player_set_equalizer does.
+    vlc_list_t *children = vlc_list_children(obj);
+    for (int i = 0; children != nullptr && i < children->i_count; ++i) {
+        auto *child = static_cast<vlc_object_t *>(children->p_values[i].p_address);
+        if (child != nullptr && child->obj.object_type != nullptr && std::strcmp(child->obj.object_type, "audio output") == 0)
+            var_SetString(child, "audio-filter", filters.c_str());
+    }
+    if (children != nullptr) vlc_list_release(children);
+    return true;
 }
 
 bool set_player_option(libvlc_media_player_t *mp, const char *name, float value) {

@@ -15,7 +15,8 @@ namespace vplayer {
 
 struct AudioEffects;
 
-// `filters`: VLC audio filter modules, ':' between them ("equalizer:normvol"). False without libVLC.
+// `filters`: VLC audio filter modules, ':' between them ("equalizer:normvol"), on the player and on
+// the audio output it already made. False without libVLC.
 bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filters);
 
 // A module option on the player, for the objects made under it that inherit it: the audio output
