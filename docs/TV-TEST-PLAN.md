@@ -63,6 +63,12 @@ Then the rest of the sections as time allows.
 | 3.3, 3.5 sign-in needed, wrong password | Pass after fixes: the dialog now comes on the TV decoder path (it fell back to software); Back ends it once; no password in VLC's messages |
 | 3.4 signing in with the remote, "Remember" | Not yet: text goes in only through the TV's keyboard (needs a person) |
 | 7b.12 playlist | Not yet (typing a name) |
+| 3.14 live HLS with no track in its parse (3ABN Kids) | Pass: the probe found 2 tracks in 5.1 s; plays on the TV decoder, 0 dropped (the start takes ~12 s: worth shortening) |
+| 7b.20 CEA-708 captions | Pass ("DIGITAL CAPTIONS (CEA-708)" at 1 s, "café (708) at 6 s") |
+| 7b.21 custom equalizer | Pass (the bands dialog; one reopen per pause, afilter="equalizer", VLC took the bands) |
+| 7b.22 subtitle file from a share | Pass after a fix (VLC's listing attached the file to its video instead of listing it) |
+| 7b.25 a long Choice list | Pass (the kit's fix: the list scrolls with the focus) |
+| Regression: DV Profile 7 TrueHD, skips | Pass; skips now use the kit's splice (the decoder's clock runs on; the shown time is right) |
 
 Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on
 Continue watching) are done.
