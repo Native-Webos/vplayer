@@ -55,15 +55,17 @@ std::string parent_of(const std::string &path) {
     return slash == std::string::npos || slash == 0 ? std::string("/") : path.substr(0, slash);
 }
 
-// Disc images play like videos in VLC (DVD and Blu-ray menus included).
-bool is_disc_image(const platform::FileEntry &e) {
-    const std::string ext = extension_upper(e.name);
-    return e.kind == platform::FileKind::Other && (ext == "ISO" || ext == "IMG");
-}
-
 TileSpec entry_tile(const platform::FileEntry &e, Thumbnails *thumbs = nullptr) {
     TileSpec t;
-    if (is_disc_image(e)) {
+    if (const std::string kind = disc_folder_kind(e.path); !kind.empty()) {  // a disc folder (first)
+        t.title = e.name;
+        t.icon_url = ui::icon("disc");
+        t.tint = ui::tint_for(e.name);
+        t.badge = kind;
+        t.subtitle = kind == "DVD" ? "Play this DVD folder" : "Play this Blu-ray folder";
+        return t;
+    }
+    if (is_disc(e)) {
         t.title = display_name(e.name);
         t.icon_url = ui::icon("disc");
         t.tint = ui::tint_for(e.name);
@@ -461,6 +463,14 @@ void BrowsePage::show_volumes(Ui &ui, const std::string &focus_path) {
 void BrowsePage::show_entries(Ui &ui, std::vector<platform::FileEntry> entries, const std::string &error,
                               const std::string &focus_path) {
     entries_ = std::move(entries);
+    // A DVD or Blu-ray folder (VIDEO_TS or BDMV inside): the disc first, played as one.
+    if (const std::string mrl = disc_folder_mrl(folder_, entries_); !mrl.empty()) {
+        platform::FileEntry disc;
+        disc.name = base_name(folder_);
+        disc.path = mrl;
+        disc.kind = platform::FileKind::Video;
+        entries_.insert(entries_.begin(), std::move(disc));
+    }
     const size_t n = entries_.size();
     count_->set_text(n == 1 ? "1 item" : std::to_string(n) + " items");
     grid_->set_items(n, [this](Ui &, size_t i) -> std::unique_ptr<View> {
@@ -510,7 +520,7 @@ void BrowsePage::activate(Ui &ui, size_t i) {
             ui.toast("Subtitle files are used automatically when the video next to them plays.");
             break;
         default:
-            if (is_disc_image(e)) {
+            if (is_disc(e)) {
                 s_.play(e);
             } else {
                 ui.toast("VPlayer cannot open this kind of file yet.");

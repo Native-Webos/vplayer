@@ -117,6 +117,29 @@ std::string extension_upper(const std::string &name) {
     return ext;
 }
 
+bool is_disc(const wnk::platform::FileEntry &e) {
+    if (!disc_folder_kind(e.path).empty()) return true;
+    const std::string ext = extension_upper(e.name);
+    return e.kind == wnk::platform::FileKind::Other && (ext == "ISO" || ext == "IMG");
+}
+
+std::string disc_folder_mrl(const std::string &folder, const std::vector<wnk::platform::FileEntry> &entries) {
+    for (const auto &e : entries) {
+        if (e.kind != wnk::platform::FileKind::Folder) continue;
+        std::string n = e.name;
+        for (char &c : n) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        if (n == "VIDEO_TS") return "dvd://" + folder;
+        if (n == "BDMV") return "bluray://" + folder;
+    }
+    return {};
+}
+
+std::string disc_folder_kind(const std::string &path) {
+    if (path.rfind("dvd://", 0) == 0) return "DVD";
+    if (path.rfind("bluray://", 0) == 0) return "BD";
+    return {};
+}
+
 std::string display_name(const std::string &name) {
     const size_t dot = name.rfind('.');
     if (dot == std::string::npos || dot == 0) return name;

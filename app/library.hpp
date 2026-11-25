@@ -36,6 +36,14 @@ std::vector<wnk::platform::FileEntry> scan_files(const std::vector<wnk::platform
 std::string format_bytes(uint64_t bytes);
 // "MKV" for "Film.mkv"; empty without an extension.
 std::string extension_upper(const std::string &name);
+// Discs: images (.iso, .img) and disc folders, which play through VLC's "dvd://" or "bluray://"
+// access. disc_folder_mrl: the address that plays `folder` as a disc when its entries hold a
+// VIDEO_TS (DVD) or BDMV (Blu-ray) folder; empty otherwise.
+bool is_disc(const wnk::platform::FileEntry &e);
+std::string disc_folder_mrl(const std::string &folder, const std::vector<wnk::platform::FileEntry> &entries);
+// "DVD" or "BD" for a disc folder's address; empty for anything else.
+std::string disc_folder_kind(const std::string &path);
+
 // The file name without its extension, for titles ("Film (2025)" for "Film (2025).mkv").
 std::string display_name(const std::string &name);
 // A position for people: "4:05", "1:02:03".

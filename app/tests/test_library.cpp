@@ -24,3 +24,36 @@ TEST("clock_text") {
     CHECK_EQ(clock_text(65'000), std::string("1:05"));
     CHECK_EQ(clock_text(-5), std::string("0:00"));
 }
+
+TEST("disc folders and images") {
+    using wnk::platform::FileEntry;
+    using wnk::platform::FileKind;
+    FileEntry ts;
+    ts.name = "VIDEO_TS";
+    ts.kind = FileKind::Folder;
+    FileEntry other;
+    other.name = "Extras";
+    other.kind = FileKind::Folder;
+    CHECK_EQ(vplayer::disc_folder_mrl("/usb/Film", {other, ts}), std::string("dvd:///usb/Film"));
+    FileEntry bd;
+    bd.name = "bdmv";
+    bd.kind = FileKind::Folder;
+    CHECK_EQ(vplayer::disc_folder_mrl("/usb/Film", {bd}), std::string("bluray:///usb/Film"));
+    FileEntry file;
+    file.name = "VIDEO_TS";  // a file of that name is not a disc
+    file.kind = FileKind::Other;
+    CHECK(vplayer::disc_folder_mrl("/usb/Film", {file, other}).empty());
+    CHECK_EQ(vplayer::disc_folder_kind("dvd:///usb/Film"), std::string("DVD"));
+    CHECK_EQ(vplayer::disc_folder_kind("bluray:///usb/Film"), std::string("BD"));
+    CHECK(vplayer::disc_folder_kind("/usb/Film.iso").empty());
+    FileEntry iso;
+    iso.name = "Film.iso";
+    iso.kind = FileKind::Other;
+    CHECK(vplayer::is_disc(iso));
+    FileEntry folder;
+    folder.name = "Film";
+    folder.path = "dvd:///usb/Film";
+    folder.kind = FileKind::Video;
+    CHECK(vplayer::is_disc(folder));
+    CHECK(!vplayer::is_disc(other));
+}

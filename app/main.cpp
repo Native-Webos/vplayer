@@ -309,8 +309,7 @@ class App : public wnk::app::Delegate {
         // and takes the remote's arrows and OK for them; without, they start at the main film (the
         // panel's Titles list reaches the extras).
         auto base = vlc_options_;
-        const std::string ext = vplayer::extension_upper(e.name);
-        const bool disc = ext == "ISO" || ext == "IMG";
+        const bool disc = vplayer::is_disc(e);
         if (disc && !settings_.disc_menus) {
             base.push_back(":no-bluray-menu");
             base.push_back(":no-dvdnav-menu");
@@ -361,8 +360,7 @@ class App : public wnk::app::Delegate {
         const std::string folder = e.path.substr(0, e.path.rfind('/'));
         if (wnk::platform::list_folder(folder, &entries, &err, 5000)) {
             for (auto &x : entries) {
-                const bool disc = x.kind == wnk::platform::FileKind::Other &&
-                                  (vplayer::extension_upper(x.name) == "ISO" || vplayer::extension_upper(x.name) == "IMG");
+                const bool disc = vplayer::is_disc(x);
                 if (x.kind != wnk::platform::FileKind::Video && x.kind != wnk::platform::FileKind::Audio && !disc) continue;
                 if (x.path == e.path) index = queue.size();
                 queue.push_back(std::move(x));
