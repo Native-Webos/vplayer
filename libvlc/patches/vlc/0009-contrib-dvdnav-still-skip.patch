@@ -1,0 +1,43 @@
+diff --git a/contrib/src/dvdnav/0003-skip-still-belongs-to-its-cell.patch b/contrib/src/dvdnav/0003-skip-still-belongs-to-its-cell.patch
+new file mode 100644
+index 0000000..9ce74d9
+--- /dev/null
++++ b/contrib/src/dvdnav/0003-skip-still-belongs-to-its-cell.patch
+@@ -0,0 +1,24 @@
++From: VPlayer
++Subject: [PATCH] dvdnav: a still skip belongs to the cell it was asked in
++
++dvdnav_still_skip() sets skip_still, which is cleared only when a cell ends. VLC calls it on every
++title change; when the viewer then calls the menu before that title's first cell ends, the flag
++carries over and skips the menu's endless still: its PGC runs out and the VM exits (DVDNAV_STOP).
++Clear it when the cell changes.
++---
++ src/dvdnav.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/src/dvdnav.c b/src/dvdnav.c
++--- a/src/dvdnav.c
+++++ b/src/dvdnav.c
++@@ -720,6 +720,9 @@
++     dvd_state_t *state = &this->vm->state;
++ 
++     this->cur_cell_time = 0;
+++    /* A still skip asked for in another cell (before a jump) is not for this one: it would skip
+++     * a menu's still and end the playback. */
+++    this->skip_still = 0;
++     (*event) = DVDNAV_CELL_CHANGE;
++ #ifdef LOG_DEBUG
++     Log3(this, "CELL_CHANGE");
+diff --git a/contrib/src/dvdnav/rules.mak b/contrib/src/dvdnav/rules.mak
+index 952d92b..d8e5245 100644
+--- a/contrib/src/dvdnav/rules.mak
++++ b/contrib/src/dvdnav/rules.mak
+@@ -26,6 +26,8 @@ dvdnav: libdvdnav-$(LIBDVDNAV_VERSION).tar.bz2 .sum-dvdnav
+ 	# fix some bogus accesses
+ 	$(APPLY) $(SRC)/dvdnav/0001-Check-the-the-title-parts-read-are-available.patch
+ 	$(APPLY) $(SRC)/dvdnav/0002-Fix-access-to-title-not-found-in-array.patch
++	# webOS (VPlayer): the disc menu, called early in a title, ended the playback
++	$(APPLY) $(SRC)/dvdnav/0003-skip-still-belongs-to-its-cell.patch
+ 	$(call pkg_static,"misc/dvdnav.pc.in")
+ 	$(MOVE)
+ 
