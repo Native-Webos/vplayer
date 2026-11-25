@@ -222,11 +222,13 @@ class VlcPlayback final : public Playback {
         if (!mp_) return out;
         libvlc_title_description_t **d = nullptr;
         const int n = libvlc_media_player_get_full_title_descriptions(mp_, &d);
+        int number = 0;  // titles as the disc numbers them: menus are not counted
         for (int i = 0; i < n; ++i) {
             Title t;
             t.length_ms = d[i]->i_duration;
             t.menu = (d[i]->i_flags & libvlc_title_menu) != 0;
-            t.name = d[i]->psz_name && *d[i]->psz_name ? d[i]->psz_name : (t.menu ? "Menu" : "Title " + std::to_string(i + 1));
+            if (!t.menu) ++number;
+            t.name = d[i]->psz_name && *d[i]->psz_name ? d[i]->psz_name : (t.menu ? "Menu" : "Title " + std::to_string(number));
             out.push_back(std::move(t));
         }
         if (n > 0) libvlc_title_descriptions_release(d, static_cast<unsigned>(n));
@@ -234,6 +236,22 @@ class VlcPlayback final : public Playback {
         return out;
     }
     int title() const override { return mp_ ? libvlc_media_player_get_title(mp_) : -1; }
+    bool in_menu() const override {
+        if (!mp_) return false;
+        const int cur = libvlc_media_player_get_title(mp_);
+        if (cur < 0) return false;
+        libvlc_title_description_t **d = nullptr;
+        const int n = libvlc_media_player_get_full_title_descriptions(mp_, &d);
+        const bool menu = cur < n && (d[cur]->i_flags & libvlc_title_menu) != 0;
+        if (n > 0) libvlc_title_descriptions_release(d, static_cast<unsigned>(n));
+        return menu;
+    }
+    void navigate(MenuKey k) override {
+        if (!mp_) return;
+        static constexpr libvlc_navigate_mode_t modes[] = {libvlc_navigate_up, libvlc_navigate_down, libvlc_navigate_left,
+                                                           libvlc_navigate_right, libvlc_navigate_activate};
+        libvlc_media_player_navigate(mp_, static_cast<unsigned>(modes[static_cast<int>(k)]));
+    }
     void set_title(int t) override {
         if (mp_) libvlc_media_player_set_title(mp_, t);
     }

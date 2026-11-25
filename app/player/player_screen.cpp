@@ -643,15 +643,18 @@ class PlayerPanel : public View {
             for (size_t k = 0; k < titles.size(); ++k) {
                 std::string detail = titles[k].length_ms > 0 ? clock_text(titles[k].length_ms) : std::string();
                 if (k == main) detail = "Main film · " + detail;
+                const bool menu = titles[k].menu;
                 rows_->add<OptionRow>(titles[k].name, static_cast<int>(k) == cur,
-                                      [this, k](Ui &ui) {
+                                      [this, k, menu](Ui &ui) {
                                           screen_.playback()->set_title(static_cast<int>(k));
-                                          refresh(ui);
+                                          // The disc's menu: out of its way, for the remote's arrows.
+                                          if (menu) screen_.close_panel(ui);
+                                          else refresh(ui);
                                       },
                                       detail);
             }
         }
-        const auto chapters = p.chapters();
+        const auto chapters = p.in_menu() ? std::vector<Chapter>{} : p.chapters();
         if (!chapters.empty()) {
             section("CHAPTERS");
             const int cur = p.chapter();
@@ -886,6 +889,7 @@ void PlayerScreen::start(Ui &ui) {
         }
     }
     applied_ = reported_ = false;
+    in_menu_ = menu_skipped_ = false;
     prev_btn_->set_enabled(has_previous());
     next_btn_->set_enabled(has_next());
     WNK_LOGI(kCat, "open %zu/%zu: %s", index_ + 1, queue_.size(), loggable(e.path).c_str());
@@ -1337,7 +1341,11 @@ bool PlayerScreen::on_action(Ui &ui, const input::ActionEvent &e) {
     using input::Action;
     switch (e.action) {
         case Action::Back:
-            if (is_press(e)) on_back(ui);
+            // In a disc menu, the first Back brings the controls (the panel, leaving).
+            if (is_press(e)) {
+                if (in_menu_ && !controls_) show_controls(ui, true);
+                else on_back(ui);
+            }
             return true;
         case Action::Stop:
             if (is_press(e)) close(ui);
@@ -1371,6 +1379,21 @@ bool PlayerScreen::on_action(Ui &ui, const input::ActionEvent &e) {
             }
             return true;
         default: break;
+    }
+    if (!controls_ && in_menu_ && playback_) {
+        // A disc menu: its buttons.
+        using K = Playback::MenuKey;
+        const K k = e.action == Action::Up     ? K::Up
+                    : e.action == Action::Down ? K::Down
+                    : e.action == Action::Left ? K::Left
+                    : e.action == Action::Right ? K::Right
+                                                : K::Activate;
+        const bool menu_key = e.action == Action::Up || e.action == Action::Down || e.action == Action::Left ||
+                              e.action == Action::Right || e.action == Action::Confirm;
+        if (menu_key) {
+            if (e.action == Action::Confirm ? is_press(e) : is_press_or_repeat(e)) playback_->navigate(k);
+            return true;
+        }
     }
     if (!controls_) {
         // Controls hidden: the catcher has focus and every key lands here.
@@ -1439,6 +1462,35 @@ void PlayerScreen::update(Ui &ui, float dt) {
         return;
     }
     if (!applied_ && (state == PlayState::Playing || state == PlayState::Paused)) apply_session();
+    // Disc menus: checked a few times a second; entering one hides the controls so the remote's
+    // arrows reach its buttons.
+    if ((menu_check_s_ += dt) >= 0.25f) {
+        menu_check_s_ = 0;
+        bool menu = playback_->in_menu();
+        if (menu && !in_menu_ && !menu_skipped_ && s_.settings != nullptr && !s_.settings->disc_menus) {
+            // Disc menus off: most discs go to their menu from their first program anyway; the main
+            // film (the longest title) instead, once. The panel's Titles list still has the menu.
+            menu_skipped_ = true;
+            const auto titles = playback_->titles();
+            int main = -1;
+            for (size_t k = 0; k < titles.size(); ++k)
+                if (!titles[k].menu && (main < 0 || titles[k].length_ms > titles[static_cast<size_t>(main)].length_ms))
+                    main = static_cast<int>(k);
+            if (main >= 0) {
+                WNK_LOGI(kCat, "disc menus off: the main film (%s)", titles[static_cast<size_t>(main)].name.c_str());
+                playback_->set_title(main);
+                menu = false;
+            }
+        }
+        if (menu && !in_menu_) {
+            WNK_LOGI(kCat, "disc menu");
+            hide_controls(ui);
+            ui.toast("Disc menu: arrows and OK choose. Back shows the controls.", 4000);
+        } else if (!menu && in_menu_) {
+            WNK_LOGI(kCat, "disc menu left");
+        }
+        in_menu_ = menu;
+    }
     // Something on screen: a frame drawn by the app, or (video plane) the TV playing.
     const bool shown = playback_->video_plane() ? state == PlayState::Playing || state == PlayState::Paused
                                                 : video_->has_frame();
@@ -1502,9 +1554,11 @@ void PlayerScreen::update(Ui &ui, float dt) {
             }
             speed_btn_->set_text(kSpeedNames[best]);
         }
-        const auto chapters = playback_->chapters();
+        // A disc menu's "chapters" are VLC's ways into the disc's menus (Resume, Root, ...): not shown.
+        const auto chapters = in_menu_ ? std::vector<Chapter>{} : playback_->chapters();
         const int c = playback_->chapter();
-        chapter_->set_text(c >= 0 && c < static_cast<int>(chapters.size())
+        chapter_->set_text(in_menu_ ? std::string("Disc menu")
+                           : c >= 0 && c < static_cast<int>(chapters.size())
                                ? "Chapter " + std::to_string(c + 1) + " · " + chapters[static_cast<size_t>(c)].name
                                : std::string());
         seek_->marks.clear();

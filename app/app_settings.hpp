@@ -21,6 +21,7 @@ struct AppSettings {
     bool subtitle_box = false;  // on a dark box instead of an outline
     int subtitle_colour = 0;    // 0 white, 1 yellow
     bool audio_pcm = false;     // the TV decoder always gets decoded PCM (no passthrough, no AC-3)
+    bool disc_menus = true;     // DVD and Blu-ray images start at their menu (the software path)
     std::string audio_language;     // ISO 639-1 ("en"); empty: the file's default track
     std::string subtitle_language;  // ISO 639-1; "any": the first track; empty: as the file says
 };

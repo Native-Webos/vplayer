@@ -176,6 +176,9 @@ class PlayerScreen : public wnk::ui::Screen {
     bool ended_ = false;        // this file played to its end
     bool resume_note_ = false;  // start_at_ms_ is a resume point: say so when it applies  // after a speed change, before checking what the engine plays
     bool controls_ = true;
+    bool in_menu_ = false;      // a disc menu shows: arrows and OK go to it while the controls are hidden
+    float menu_check_s_ = 0;
+    bool menu_skipped_ = false;  // disc menus off (Settings): the main film was started once
     bool closing_ = false;
     bool applied_ = false;     // apply_session ran for this file
     // The same file opened again (new audio effects): what the viewer had chosen, restored once the

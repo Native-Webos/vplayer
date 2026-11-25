@@ -53,6 +53,7 @@ float subtitle_scale(int size) {
 std::string settings_json(const AppSettings &s) {
     return nlohmann::json{{"software_only", s.software_only}, {"resume", s.resume}, {"subtitle_size", s.subtitle_size},
                           {"subtitle_box", s.subtitle_box}, {"subtitle_colour", s.subtitle_colour}, {"audio_pcm", s.audio_pcm},
+                          {"disc_menus", s.disc_menus},
                           {"audio_language", s.audio_language}, {"subtitle_language", s.subtitle_language}}
         .dump();
 }
@@ -69,6 +70,7 @@ AppSettings settings_from_json(const std::string &text) {
     if (auto it = j.find("subtitle_colour"); it != j.end() && it->is_number_integer())
         s.subtitle_colour = std::clamp(it->get<int>(), 0, 1);
     if (auto it = j.find("audio_pcm"); it != j.end() && it->is_boolean()) s.audio_pcm = it->get<bool>();
+    if (auto it = j.find("disc_menus"); it != j.end() && it->is_boolean()) s.disc_menus = it->get<bool>();
     if (auto it = j.find("audio_language"); it != j.end() && it->is_string()) s.audio_language = it->get<std::string>();
     if (auto it = j.find("subtitle_language"); it != j.end() && it->is_string())
         s.subtitle_language = it->get<std::string>();

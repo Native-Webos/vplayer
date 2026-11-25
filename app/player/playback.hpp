@@ -199,6 +199,10 @@ class Playback {
     virtual void set_title(int) {}
     virtual int chapter() const { return -1; }
     virtual void set_chapter(int) {}
+    // A disc's menu is showing: its buttons take the remote's arrows and OK (navigate).
+    virtual bool in_menu() const { return false; }
+    enum class MenuKey : uint8_t { Up, Down, Left, Right, Activate };
+    virtual void navigate(MenuKey) {}
 
     // ---- audio ----
     virtual std::vector<std::string> equalizer_presets() const { return {}; }

@@ -305,15 +305,18 @@ class App : public wnk::app::Delegate {
     std::unique_ptr<vplayer::Playback> open_playback(const wnk::platform::FileEntry &e, bool software,
                                                      const vplayer::AudioEffects &effects = {}) {
         const bool audio_only = e.kind == wnk::platform::FileKind::Audio;
-        const bool hw = engine_ && hw_available_ && !software && !audio_only && decoder_ != "software";
-        // Disc images start at the main film, not at the disc's menu, which the remote cannot
-        // navigate (the panel's Titles list reaches the extras).
+        // Disc images: with menus (Settings), on the software path, which draws the menu's buttons
+        // and takes the remote's arrows and OK for them; without, they start at the main film (the
+        // panel's Titles list reaches the extras).
         auto base = vlc_options_;
         const std::string ext = vplayer::extension_upper(e.name);
-        if (ext == "ISO" || ext == "IMG") {
+        const bool disc = ext == "ISO" || ext == "IMG";
+        if (disc && !settings_.disc_menus) {
             base.push_back(":no-bluray-menu");
             base.push_back(":no-dvdnav-menu");
         }
+        const bool hw = engine_ && hw_available_ && !software && !audio_only && decoder_ != "software" &&
+                        !(disc && settings_.disc_menus);
         // Settings: languages. VLC picks the subtitle track ("any": the first one) on both paths,
         // and the audio track on the software path; the TV decoder path is told below.
         if (!settings_.subtitle_language.empty()) base.push_back(":sub-language=" + settings_.subtitle_language);
@@ -549,6 +552,10 @@ class App : public wnk::app::Delegate {
                                            settings_.audio_pcm = i == 1;
                                            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
                                        });
+        d->body().add<wnk::ui::Toggle>("Disc menus (DVD and Blu-ray images)", settings_.disc_menus, [this](Ui &, bool on) {
+            settings_.disc_menus = on;
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
         // Subtitle downloads: the viewer's own OpenSubtitles account and API key.
         d->body().add<wnk::ui::ValueRow>("Subtitle downloads",
                                          services_.subtitles_account.configured() ? "OpenSubtitles · " + services_.subtitles_account.username
