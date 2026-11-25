@@ -16,6 +16,14 @@ pool: main
 # Max 80 characters.
 shortDescription: VLC's playback engine as a native webOS app, driven by the remote
 
+screenshots:
+  - url: https://raw.githubusercontent.com/Native-Webos/vplayer/main/app/packaging/screenshots/home.jpg
+    caption: Home
+  - url: https://raw.githubusercontent.com/Native-Webos/vplayer/main/app/packaging/screenshots/network.jpg
+    caption: Network shares and streams
+  - url: https://raw.githubusercontent.com/Native-Webos/vplayer/main/app/packaging/screenshots/player.jpg
+    caption: Playback
+
 requirements:
   # Startup bound only: the firmware symbol check of the release package (7 images, webOS 5.3 to 11.2).
   webosRelease: '>=5.3'
