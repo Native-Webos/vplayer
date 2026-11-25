@@ -1,0 +1,34 @@
+diff --git a/modules/video_output/vmem.c b/modules/video_output/vmem.c
+--- a/modules/video_output/vmem.c
++++ b/modules/video_output/vmem.c
+@@ -95,6 +95,9 @@
+     void (*unlock)(void *sys, void *id, void *const *plane);
+     void (*display)(void *sys, void *id);
+     void (*cleanup)(void *sys);
++    /* The application's (optional "vmem-sar"): the source's sample aspect ratio, at the start and
++     * whenever it changes (a DVD's 4:3 menu, then its 16:9 film, in pictures of one size). */
++    void (*sar)(void *sys, unsigned num, unsigned den);
+ 
+     unsigned pitches[PICTURE_PLANE_MAX];
+     unsigned lines[PICTURE_PLANE_MAX];
+@@ -216,6 +219,9 @@
+     }
+ 
+     /* */
++    sys->sar = setup != NULL ? var_InheritAddress(vd, "vmem-sar") : NULL;
++    if (sys->sar != NULL)
++        sys->sar(sys->opaque, vd->source.i_sar_num, vd->source.i_sar_den);
+     vd->sys     = sys;
+     vd->fmt     = fmt;
+     vd->pool    = Pool;
+@@ -289,6 +295,9 @@
+ 
+ static int Control(vout_display_t *vd, int query, va_list args)
+ {
+-    (void) vd; (void) query; (void) args;
++    (void) args;
++    vout_display_sys_t *sys = vd->sys;
++    if (query == VOUT_DISPLAY_CHANGE_SOURCE_ASPECT && sys->sar != NULL)
++        sys->sar(sys->opaque, vd->source.i_sar_num, vd->source.i_sar_den);
+     return VLC_EGENERIC;
+ }
