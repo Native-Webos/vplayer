@@ -14,20 +14,38 @@
 namespace vplayer {
 
 #if VPLAYER_HAVE_LIBVLC
+namespace {
+// A string variable on the audio output(s) the player has made. VLC 3 makes a player's audio output
+// with the player (lib/media_player.c), so it exists before play; it copied the player's variables
+// then. Returns how many outputs took it.
+int set_on_audio_outputs(vlc_object_t *player, const char *name, const char *value) {
+    int n = 0;
+    vlc_list_t *children = vlc_list_children(player);
+    for (int i = 0; children != nullptr && i < children->i_count; ++i) {
+        auto *child = static_cast<vlc_object_t *>(children->p_values[i].p_address);
+        if (child != nullptr && child->obj.object_type != nullptr && std::strcmp(child->obj.object_type, "audio output") == 0 &&
+            var_SetString(child, name, value) == VLC_SUCCESS)
+            ++n;
+    }
+    if (children != nullptr) vlc_list_release(children);
+    return n;
+}
+}  // namespace
+
 bool set_player_audio_filters(libvlc_media_player_t *mp, const std::string &filters) {
     if (mp == nullptr) return false;
     vlc_object_t *obj = reinterpret_cast<vlc_object_t *>(mp);
     if (var_SetString(obj, "audio-filter", filters.c_str()) != VLC_SUCCESS) return false;
-    // VLC 3 makes the player's audio output with the player (lib/media_player.c), and the output
-    // copied the filter list then: set it there too, as libvlc_media_player_set_equalizer does.
-    vlc_list_t *children = vlc_list_children(obj);
-    for (int i = 0; children != nullptr && i < children->i_count; ++i) {
-        auto *child = static_cast<vlc_object_t *>(children->p_values[i].p_address);
-        if (child != nullptr && child->obj.object_type != nullptr && std::strcmp(child->obj.object_type, "audio output") == 0)
-            var_SetString(child, "audio-filter", filters.c_str());
-    }
-    if (children != nullptr) vlc_list_release(children);
+    // The output too, as libvlc_media_player_set_equalizer does.
+    set_on_audio_outputs(obj, "audio-filter", filters.c_str());
     return true;
+}
+
+bool set_player_visualisation(libvlc_media_player_t *mp, const char *effect) {
+    if (mp == nullptr) return false;
+    // The output's "visual" (what VLC's own interfaces set): its callback picks the module (the
+    // "visual" one with this effect) and restarts the audio with it.
+    return set_on_audio_outputs(reinterpret_cast<vlc_object_t *>(mp), "visual", effect) > 0;
 }
 
 bool set_player_option(libvlc_media_player_t *mp, const char *name, float value) {
@@ -58,6 +76,7 @@ libvlc_equalizer_t *make_equalizer(const AudioEffects &) { return nullptr; }
 bool set_player_audio_filters(libvlc_media_player_t *, const std::string &) { return false; }
 bool set_player_option(libvlc_media_player_t *, const char *, float) { return false; }
 bool set_player_address(libvlc_media_player_t *, const char *, void *) { return false; }
+bool set_player_visualisation(libvlc_media_player_t *, const char *) { return false; }
 #endif
 
 }  // namespace vplayer

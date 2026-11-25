@@ -101,6 +101,7 @@ class VlcPlayback final : public Playback {
             WNK_LOGW(kCat, "vmem-sar not set");
         // The audio effects before play: the audio output takes the player's filters when it is made.
         if (effects.volume != 100) libvlc_audio_set_volume(mp_, std::clamp(effects.volume, 0, 200));
+        if (effects.visual != 0) set_visualisation(effects.visual);
         if (effects.equalizer >= 0) apply_equalizer(effects);
         if (const std::string chain = effects.filter_chain(); !chain.empty()) {
             const std::string filters = (effects.equalizer >= 0 ? "equalizer:" : "") + chain;
@@ -212,6 +213,13 @@ class VlcPlayback final : public Playback {
     void set_rate(float r) override {
         if (mp_) libvlc_media_player_set_rate(mp_, r);
     }
+    // VLC draws the sound as a picture when there is no video (its "visual" module), through the
+    // same video callbacks.
+    void set_visualisation(int index) {
+        const char *effect = visual_effect(index);
+        if (!set_player_visualisation(mp_, effect)) WNK_LOGW(kCat, "vlc: visualisation %s not set", effect);
+        else WNK_LOGI(kCat, "vlc: visualisation %s", *effect ? effect : "off");
+    }
     bool can_step_frame() const override { return mp_ != nullptr && libvlc_media_player_has_vout(mp_) > 0; }
     void step_frame() override {
         if (mp_) libvlc_media_player_next_frame(mp_);
@@ -305,6 +313,7 @@ class VlcPlayback final : public Playback {
     bool apply_audio_effects(const AudioEffects &fx) override {
         if (fx.filter_chain() != opened_.filter_chain() || fx.pitch != opened_.pitch) return false;
         if (!fx.filter_chain().empty() && !fx.same_equalizer(opened_)) return false;
+        if (fx.visual != opened_.visual) set_visualisation(fx.visual);  // live
         // Only what changed (an unchanged equalizer set again would drop the other filters). The
         // volume always: the audio output may not have existed when it was first set.
         if (!fx.same_equalizer(opened_)) apply_equalizer(fx);

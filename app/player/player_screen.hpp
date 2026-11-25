@@ -49,6 +49,7 @@ struct PlayerSettings {
     bool widen = false;          // wider stereo (VLC's stereo_widen)
     bool compressor = false, spatializer = false;
     int pitch = 0;               // semitones
+    int visual = 0;              // visual_effect_names()
     AudioEffects effects() const {
         AudioEffects fx;
         fx.equalizer = equalizer;
@@ -59,6 +60,7 @@ struct PlayerSettings {
         fx.compressor = compressor;
         fx.spatializer = spatializer;
         fx.pitch = pitch;
+        fx.visual = visual;
         return fx;
     }
     AspectMode aspect = AspectMode::Fit;
@@ -186,6 +188,7 @@ class PlayerScreen : public wnk::ui::Screen {
     bool ended_ = false;        // this file played to its end
     bool resume_note_ = false;  // start_at_ms_ is a resume point: say so when it applies  // after a speed change, before checking what the engine plays
     bool controls_ = true;
+    bool audio_file_ = false;   // a local audio file: its cover shows (unless a visualisation does)
     bool in_menu_ = false;      // a disc menu shows: arrows and OK go to it while the controls are hidden
     float menu_check_s_ = 0;
     bool menu_skipped_ = false;  // disc menus off (Settings): the main film was started once

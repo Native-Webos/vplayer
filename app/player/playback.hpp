@@ -102,6 +102,7 @@ struct AudioEffects {
     bool compressor = false;   // VLC's compressor: loud and quiet parts closer
     bool spatializer = false;  // VLC's spatializer: room sound
     int pitch = 0;             // semitones, -12..12 (VLC's scaletempo_pitch)
+    int visual = 0;            // files without video: index into visual_effect_names(), 0 off
     bool active() const { return equalizer >= 0 || volume != 100 || !filter_chain().empty(); }
     // The filters these settings need besides the equalizer and the volume, ':' between them, in
     // VLC's names; set when the audio starts (a change reopens).
@@ -120,10 +121,14 @@ struct AudioEffects {
     }
     bool operator==(const AudioEffects &o) const {
         return same_equalizer(o) && volume == o.volume && normalize == o.normalize && widen == o.widen &&
-               compressor == o.compressor && spatializer == o.spatializer && pitch == o.pitch;
+               compressor == o.compressor && spatializer == o.spatializer && pitch == o.pitch && visual == o.visual;
     }
     bool operator!=(const AudioEffects &o) const { return !(*this == o); }
 };
+// VLC's visualisations (the "visual" module's effects) for files without video: names for people,
+// and the effect each one is, by index ("" for Off).
+const std::vector<std::string> &visual_effect_names();
+const char *visual_effect(int index);
 // People's names for VLC's equalizer presets, in libVLC's order.
 std::vector<std::string> equalizer_preset_labels();
 

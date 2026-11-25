@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player/playback.hpp"
 
+#include <iterator>
 #include <algorithm>
 
 namespace vplayer {
@@ -8,6 +9,16 @@ namespace vplayer {
 namespace {
 int align(int v, int a) { return (v + a - 1) / a * a; }
 }  // namespace
+
+const std::vector<std::string> &visual_effect_names() {
+    static const std::vector<std::string> names{"Off", "Spectrum", "Oscilloscope", "VU meter", "Spectrometer"};
+    return names;
+}
+
+const char *visual_effect(int index) {
+    static const char *const effects[] = {"", "spectrum", "scope", "vuMeter", "spectrometer"};
+    return index > 0 && index < static_cast<int>(std::size(effects)) ? effects[index] : "";
+}
 
 std::vector<std::string> equalizer_preset_labels() {
     return {"Flat", "Classical", "Club", "Dance", "Full bass", "Full bass and treble", "Full treble", "Headphones",

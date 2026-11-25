@@ -398,6 +398,12 @@ class PlayerPanel : public View {
             const int n = static_cast<int>(std::lround(v));
             return n == 0 ? std::string("Unchanged") : (n > 0 ? "+" : "") + std::to_string(n) + " semitones";
         });
+        if (!p.video_plane() && p.video_tracks().empty()) {  // no video: VLC can draw the sound
+            rows_->add<Choice>("Visualisation", visual_effect_names(), st.visual, [this](Ui &ui, int i) {
+                screen_.settings().visual = i;
+                screen_.apply_effects(ui);
+            });
+        }
         if (p.video_plane() && st.effects().active())
             rows_->add<ValueRow>("With effects on", "the TV gets decoded stereo PCM", [](Ui &) {});
     }
@@ -889,7 +895,8 @@ void PlayerScreen::start(Ui &ui) {
     ui.set_clear_color(plane ? std::optional<Color>(render::kTransparent) : std::nullopt);
     title_->set_text(display_name(e.name));
     const bool audio = e.kind == platform::FileKind::Audio && e.path.find("://") == std::string::npos;
-    art_->set_visible(audio);
+    audio_file_ = audio;
+    art_->set_visible(audio && settings_.visual == 0);  // a visualisation shows instead
     if (audio) {
         std::vector<platform::FileEntry> siblings;
         std::string err;
@@ -1180,6 +1187,7 @@ void PlayerScreen::find_sidecars(const std::string &path) {
 
 void PlayerScreen::apply_effects(Ui &ui) {
     (void)ui;
+    art_->set_visible(audio_file_ && settings_.visual == 0);
     if (!playback_ || playback_->apply_audio_effects(settings_.effects())) {
         effects_wait_s_ = 0;
         return;
