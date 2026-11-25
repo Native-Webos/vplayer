@@ -72,6 +72,12 @@ Then the rest of the sections as time allows.
 | 3.1, 3.2 DLNA (test server: `app/tools/net-test/run.sh`) | Pass: "VPlayer test · DLNA media server" found; its folders browse (All Video: 15 files); a video plays on the TV decoder in 0.7 s |
 | 3.8 FTP | Pass: plays on the TV decoder; a skip lands where asked |
 | 7b.6 DVD menus (test DVD) | Pass after three fixes: square pixels on the software path (aspect from VLC's output, patch 0008); the menu chosen from Titles early in a title ended the playback (libdvdnav, patch 0009); with menus off the disc still went to its menu (the main film now starts). The menu's highlight moves with the arrows, OK plays, titles return to the menu; film 25 fps, 0 lost. Blu-ray: no test image yet |
+| 7b.23 crop, zoom (`letterbox-4x3.mp4`) | Pass after a kit fix: on the TV decoder only the first placement took effect (aspect, zoom and fill changes did nothing); the kit now uses the exported window's crop region. Crop 16:9 fills the screen on both paths; videooutput confirms the source rectangle |
+| 7b.24 frame by frame | Pass (software path: 3 OKs, frames 543 → 546) |
+| 7b.26 DVD folder (VIDEO_TS) | Pass: disc tile first in the folder; menu in 60 ms |
+| 7b.27 compressor, spatializer, pitch | Pass (loaded by VLC on both paths; the pitch shifter's empty first block made Starfish fail: fixed). Normalise and wider stereo did nothing on the software path before (filters never reached VLC's audio output): fixed. By ear: not yet |
+| 7b.28 rotate, mirror | Pass (software path) |
+| 7b.29 visualisation | Pass (Spectrum on a tone, live) |
 | 3.8 SFTP (stock OpenSSH 10) | Pass after two fixes: opening one ended the app (libgcrypt found no /dev/random in the app's jail: patch 0006), then every current server refused VLC's old key exchanges (libssh2 now on OpenSSL: patch 0007). First frame 2.4 s, skips land |
 
 Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on

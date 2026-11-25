@@ -20,7 +20,7 @@ planned for a TV app
 **In short:** playing files, network sources, streams and discs is at VLC's level, and on the TV
 decoder it goes beyond what VLC can do on webOS (4K HDR10 and Dolby Vision with no dropped frames).
 What is missing is mostly VLC's work beyond playback: converting and streaming out, its interfaces
-and extensions, and some audio and video filters.
+and extensions, and some video filters.
 
 ### Playing
 
@@ -33,10 +33,10 @@ and extensions, and some audio and video filters.
 | Seeking, ±10 s, jump to time, chapters | ✅ | Both paths |
 | Speed 0.25–4× | ✅ | Pitch kept on both paths |
 | A-B repeat, repeat, sleep timer, bookmarks, resume | ✅ | Resume and "Continue watching" across launches |
-| Frame by frame | ❌ | |
+| Frame by frame | 🟡 | Software path only: the TV decoder cannot step |
 | DVD images with menus | ✅ | Remote drives the menu; patched libdvdnav (see `libvlc/patches`) |
-| DVD folders (VIDEO_TS) | ❌ | Images (.iso/.img) only |
-| Blu-ray images | 🟡 | Titles; HDMV menus untested (no test image); BD-J menus need Java, which the build lacks |
+| DVD folders (VIDEO_TS) | ✅ | Shown as a disc tile in the folder |
+| Blu-ray images and folders (BDMV) | 🟡 | Titles; HDMV menus untested (no test disc); BD-J menus need Java, which the build lacks |
 | 360° video | ❌ | |
 
 ### Sources
@@ -74,14 +74,14 @@ and extensions, and some audio and video filters.
 | Feature | VPlayer | Notes |
 |---|---|---|
 | Audio track and delay | ✅ | |
-| Equalizer (presets and own bands), volume to 200 %, normalise, wider stereo | 🟡 | Work in VLC on the TV; not checked by ear yet |
-| Compressor, spatializer, pitch shift | ❌ | VLC's filters exist; no controls |
-| Aspect ratio and zoom | ✅ | |
-| Crop | ❌ | |
+| Equalizer (presets and own bands), volume to 200 %, normalise, wider stereo, compressor, spatializer, pitch shift | 🟡 | VLC loads them on both paths on the TV; not checked by ear yet |
+| Aspect ratio and zoom | ✅ | Both paths |
+| Crop (VLC's ratios) | ✅ | Both paths |
 | Deinterlace, picture adjust (brightness, contrast, ...) | 🟡 | Software path only: the TV decoder's picture never reaches VLC |
-| Rotate, transform and other video filters | ❌ | |
+| Rotate and mirror | 🟡 | Software path only: the TV decoder's picture cannot turn |
+| Other video filters (sharpen, blur, motion, puzzle, ...) | ❌ | |
 | Snapshot | 🟡 | Software path only |
-| Audio visualisations | ❌ | |
+| Audio visualisations | ✅ | VLC's spectrum, oscilloscope, VU meter, spectrometer, for music |
 
 ### Beyond playback
 
