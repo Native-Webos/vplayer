@@ -215,7 +215,22 @@ Tile::Tile(const TileSpec &spec) : Column(12), title_(spec.title), subtitle_(spe
         more.set_background(Color::hex(0x101014D0), 22);
         more.set_align(Align::End, Align::Start);
     }
-    if (!spec.corner.empty()) chips->add<Chip>(spec.corner).set_align(Align::End, Align::End);
+    if (spec.progress >= 0) {
+        // Watched so far: an accent bar on a faint track along the bottom of the thumbnail.
+        const float p = std::clamp(spec.progress, 0.0f, 1.0f);
+        auto &track = chips->add<Row>(0);
+        track.set_width(Dim::fill());
+        track.set_height(Dim::fixed(6));
+        track.set_align(Align::Stretch, Align::End);
+        track.set_background(Color::hex(0xFFFFFF40), 3);
+        track.add<View>().set_width(Dim::fill(std::max(p, 0.001f))).set_height(Dim::fill()).set_background(col::accent, 3);
+        track.add<View>().set_width(Dim::fill(std::max(1 - p, 0.001f)));
+    }
+    if (!spec.corner.empty()) {
+        auto &c = chips->add<Chip>(spec.corner);
+        c.set_align(Align::End, Align::End);
+        if (spec.progress >= 0) c.set_translation({0, -14});  // above the bar
+    }
 
     auto &text = add<Column>(4);
     auto &t = text.add<Label>(spec.title);

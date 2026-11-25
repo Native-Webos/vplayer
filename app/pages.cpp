@@ -285,7 +285,10 @@ void HomePage::show_rail(Ui &) {
                 t.image_url = s_.thumbnails->get(e);
             }
             t.subtitle = "From " + clock_text(h.position_ms) + (remote ? " · network" : "");
-            if (h.length_ms > h.position_ms) t.corner = std::to_string((h.length_ms - h.position_ms + 59'999) / 60'000) + " min left";
+            if (h.length_ms > h.position_ms) {
+                t.corner = std::to_string((h.length_ms - h.position_ms + 59'999) / 60'000) + " min left";
+                t.progress = static_cast<float>(h.position_ms) / static_cast<float>(h.length_ms);
+            }
             return std::make_unique<Tile>(t);
         });
         recent_source_->set_text("Where you stopped");

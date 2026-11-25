@@ -101,6 +101,7 @@ struct TileSpec {
     Color tint = col::surface;
     std::string badge;         // top left, e.g. "MKV"
     std::string corner;        // bottom right, e.g. "4.2 GB"
+    float progress = -1;       // how far it was watched, 0..1: a bar along the bottom; < 0 for none
     // Options for this item (edit, delete): a "⋮" button at the top right, for the pointer; on a
     // MenuGrid, holding OK on the tile opens them too.
     wnk::ui::ClickHandler on_menu;
