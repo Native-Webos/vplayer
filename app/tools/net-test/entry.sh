@@ -10,11 +10,6 @@ Port 2222
 PasswordAuthentication yes
 KbdInteractiveAuthentication no
 Subsystem sftp internal-sftp
-# What older servers accepted, for VLC's libssh2 (libgcrypt backend), which offers no more: the
-# classic Diffie-Hellman key exchanges (OpenSSH 10 dropped them from its defaults)...
-KexAlgorithms +diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
-# and its only host key signature, RSA with SHA-1 (OpenSSH 8.8 and later refuse it by default).
-HostKeyAlgorithms +ssh-rsa
 CONF
 /usr/sbin/sshd
 # FTP on 2121, passive ports 30000-30009 on the given address.
