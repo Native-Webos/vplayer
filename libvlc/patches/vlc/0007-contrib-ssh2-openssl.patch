@@ -1,0 +1,68 @@
+diff --git a/contrib/src/openssl/SHA512SUMS b/contrib/src/openssl/SHA512SUMS
+new file mode 100644
+index 0000000..bbe7164
+--- /dev/null
++++ b/contrib/src/openssl/SHA512SUMS
+@@ -0,0 +1 @@
++c4c8136fd2c98d13bb85a57bfb0def25c906f47f1fe97675cd114594944eab957b5b81a3e0f48826e1a0f093afff5e83766b539d49768f6db68310fd678d7de6  openssl-3.5.9.tar.gz
+diff --git a/contrib/src/openssl/rules.mak b/contrib/src/openssl/rules.mak
+new file mode 100644
+index 0000000..ac1853f
+--- /dev/null
++++ b/contrib/src/openssl/rules.mak
+@@ -0,0 +1,34 @@
++# openssl: libcrypto, for libssh2's crypto backend (the libgcrypt one has neither the key exchanges
++# nor the host key signatures current OpenSSH servers accept).
++
++OPENSSL_VERSION := 3.5.9
++OPENSSL_URL := https://github.com/openssl/openssl/releases/download/openssl-$(OPENSSL_VERSION)/openssl-$(OPENSSL_VERSION).tar.gz
++
++$(TARBALLS)/openssl-$(OPENSSL_VERSION).tar.gz:
++	$(call download_pkg,$(OPENSSL_URL),openssl)
++
++.sum-openssl: openssl-$(OPENSSL_VERSION).tar.gz
++
++openssl: openssl-$(OPENSSL_VERSION).tar.gz .sum-openssl
++	$(UNPACK)
++	$(MOVE)
++
++ifeq ($(ARCH),arm)
++OPENSSL_TARGET := linux-armv4
++else ifeq ($(ARCH),aarch64)
++OPENSSL_TARGET := linux-aarch64
++else ifeq ($(ARCH),x86_64)
++OPENSSL_TARGET := linux-x86_64
++else
++OPENSSL_TARGET := linux-generic32
++endif
++
++.openssl: openssl
++	cd $< && $(HOSTVARS) ./Configure $(OPENSSL_TARGET) no-shared no-tests no-docs no-engine no-dso no-module \
++		-fPIC --prefix=$(PREFIX) --libdir=lib
++	+cd $< && $(MAKE) build_libs
++	+cd $< && $(MAKE) install_dev
++	# Static: what libcrypto needs goes with it (the plugins link with the plain pkg-config flags;
++	# glibc 2.12 keeps the threads in libpthread).
++	sed -i -e 's,^Libs: -L$${libdir} -lcrypto$$,Libs: -L$${libdir} -lcrypto -ldl -lpthread -latomic,' $(PREFIX)/lib/pkgconfig/libcrypto.pc
++	touch $@
+diff --git a/contrib/src/ssh2/rules.mak b/contrib/src/ssh2/rules.mak
+index c114ddd..68eac67 100644
+--- a/contrib/src/ssh2/rules.mak
++++ b/contrib/src/ssh2/rules.mak
+@@ -23,13 +23,14 @@ ssh2: libssh2-$(LIBSSH2_VERSION).tar.xz .sum-ssh2
+ 	$(UNPACK)
+ 	$(MOVE)
+ 
+-DEPS_ssh2 = gcrypt $(DEPS_gcrypt)
++DEPS_ssh2 = openssl $(DEPS_openssl)
+ ifdef HAVE_WINSTORE
+ # uses SecureZeroMemory
+ DEPS_ssh2 += alloweduwp $(DEPS_alloweduwp)
+ endif
+ 
+-SSH2_CONF := -DBUILD_EXAMPLES=OFF -DLIBSSH2_BUILD_DOCS=OFF -DCRYPTO_BACKEND:STRING=Libgcrypt $(BROKEN_GCC_CFLAGS)
++SSH2_CONF := -DBUILD_EXAMPLES=OFF -DLIBSSH2_BUILD_DOCS=OFF -DCRYPTO_BACKEND:STRING=OpenSSL -DOPENSSL_ROOT_DIR=$(PREFIX) \
++	-DOPENSSL_USE_STATIC_LIBS=TRUE $(BROKEN_GCC_CFLAGS)
+ 
+ .ssh2: ssh2 toolchain.cmake
+ 	$(CMAKECLEAN)

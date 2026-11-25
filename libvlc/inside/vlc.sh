@@ -71,9 +71,12 @@ CONFIGURE_ARGS=(
 #   <strings.h>; the replacement prototype it would add clashes with glibc's noexcept one in every
 #   C++ module.
 # Configure again whenever the arguments change (the build is otherwise incremental).
-if [[ ! -f Makefile || "$(cat .configure-args 2>/dev/null)" != "${CONFIGURE_ARGS[*]}" ]]; then
+# Configure again when its arguments change, or the contribs' pkg-config files (a library rebuilt
+# with other dependencies: modules' link flags are taken at configure time).
+CONFIGURE_KEY="${CONFIGURE_ARGS[*]} $(cat "$CONTRIB_PREFIX"/lib/pkgconfig/*.pc 2>/dev/null | sha256sum | cut -c1-16)"
+if [[ ! -f Makefile || "$(cat .configure-args 2>/dev/null)" != "$CONFIGURE_KEY" ]]; then
     "$VLC_SRC/configure" "${CONFIGURE_ARGS[@]}"
-    echo "${CONFIGURE_ARGS[*]}" > .configure-args
+    echo "$CONFIGURE_KEY" > .configure-args
 fi
 
 # libtool links C++ shared objects with -nostdlib and its own runtime list, which silently defeats
