@@ -1,5 +1,7 @@
 # Roadmap
 
+Feature comparison with VLC: README.md, "Compared with VLC".
+
 Each phase ends with something that runs on the TV. "Done" needs a device record: model, webOS
 release and date.
 
@@ -90,7 +92,7 @@ release and date.
       (credentials in its keystore), open a stream by address, recent addresses. Host-tested only
 - [x] SMB2/3 in the libVLC build (smb2 module, libsmb2); SMB1/NetBIOS (libdsm) not buildable on glibc 2.12
 - [x] Resume points and "Continue watching" on Home; Settings: decoder, resume. Host-tested only
-- [ ] On the TV: discovery, an SMB share with a password, a DLNA server, an HLS stream
+- [x] On the TV: discovery, an SMB share with a password, a DLNA server, an HLS stream, FTP, SFTP
 - [x] Playlists tab: M3U/M3U8 (IPTV groups and logos), PLS, XSPF, local and by address. Host-tested only
 - [x] Music tab: albums from folders with covers, shuffle; cover in the player. Host-tested only
 - [ ] The TV run of docs/TV-TEST-PLAN.md
@@ -109,16 +111,16 @@ release and date.
 - [x] On the TV 2026-11-24: Subtitles tab lists the sidecar SRT; Info tab shows HEVC 3840×2160 24 fps
       and TrueHD 8 ch for thd-20s.mkv, and 203 shown / 66 dropped for MPEG-4 720p (the P1 drop issue)
 - [x] Remote interaction on the TV (pause, seek, panels) with app/tools/tv-keys.sh (RESEARCH.md §13)
-- [x] Disc titles (software path), discs start at the main film; jump to time; bookmarks; subtitle
+- [x] Disc titles (software path); jump to time; bookmarks; subtitle
       size and background (Settings); search. Host-tested
 - [x] Subtitle colour, audio to the TV (decoded PCM option), audio delay on the hardware path,
       snapshots (software path), your own playlists, video thumbnails. Host-tested
 - [x] Audio effects on both paths (equalizer presets, volume boost, normalise, wider stereo; the TV
       decoder path runs them in VLC's transcode and reopens the file). Host-tested
 - [x] Closed captions (CEA-608 CC1 from H.264/HEVC SEI) on the TV decoder path. Host-tested
-- [ ] CEA-708 captions
+- [x] CEA-708 captions (on the TV)
 - [ ] Teletext pages (not subtitles) as a viewer
-- [ ] DVD/Blu-ray ISO and folders with menus (software path)
+- [x] DVD images with menus (software path, on the TV); Blu-ray menus untested; DVD folders not yet
 - [ ] Video on the TV decoder path: deinterlace, adjust (the TV decodes: VLC never sees the picture)
 - [ ] Own GLES2 `vout_display` module for the software path (no vmem copy, VLC subpictures drawn by VLC)
 - [x] Sleep timer, repeat (file, folder), bookmarks, snapshot (shuffle: Music)
