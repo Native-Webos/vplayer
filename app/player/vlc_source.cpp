@@ -760,6 +760,10 @@ int VlcSource::on_send(void *opaque, void *id, const uint8_t *data, size_t size,
         return 0;
     }
 
+    // An empty block carries nothing (a filter that buffers, as the pitch shifter does at its start,
+    // can hand one on) and the TV rejects it.
+    if (size == 0) return 0;
+
     // Rebase streams that start far from zero (MPEG-TS clocks), so content time matches libVLC's.
     const int64_t t0 = pts != WNK_BRIDGE_NO_TIME ? pts : dts;
     if (!self->base_known_ && t0 != WNK_BRIDGE_NO_TIME) {
