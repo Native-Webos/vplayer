@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # tools/make-icons.py OUT_DIR : the Pylon mark (assets/icons/logo-pylon.svg's geometry) as icon.png (80 px) and
-# largeIcon.png (130 px), the webOS launcher icons, plus pylon-512.png. Needs Pillow. The SVG is drawn by
+# largeIcon.png (130 px), the webOS launcher icons, icon160.png and icon320.png for the Homebrew Channel
+# listing (app/packaging), plus pylon-512.png. Needs Pillow. The SVG is drawn by
 # the app (nanosvg: no clip paths, so the bands are computed shapes); keep both in step.
 import sys
 from PIL import Image, ImageDraw
@@ -33,4 +34,6 @@ def mark(size):
 out = sys.argv[1]
 mark(80).save(out + '/icon.png')
 mark(130).save(out + '/largeIcon.png')
+mark(160).save(out + '/icon160.png')  # Homebrew Channel listing card
+mark(320).save(out + '/icon320.png')  # its detail page
 mark(512).save(out + '/pylon-512.png')

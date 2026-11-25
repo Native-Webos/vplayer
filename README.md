@@ -127,6 +127,14 @@ cd app
   as an extra drive through `VPLAYER_EXTRA_ROOT`).
 - On the TV, open a folder directly: `ares-launch -d tv com.sostk.vplayer -p '{"browse":"/tmp/usb/sda/sda1"}'`.
 
+## Releases and the Homebrew Channel
+
+Each release on GitHub carries the `.ipk` and `com.sostk.vplayer.manifest.json`, made from it by
+`app/tools/make-manifest.py IPK TAG OUT.json`. The Homebrew Channel registration
+(`app/packaging/com.sostk.vplayer.yml`) points at the newest full release's manifest, so a release
+must not be marked as a pre-release to reach the channel. Listing icons: `app/packaging/icon160.png`
+and `icon320.png` (`app/tools/make-icons.py`).
+
 ## Licence
 
 GPL-3.0-or-later (the kit is GPL-3.0+; libVLC is LGPL-2.1+, VLC modules GPL-2.0+/LGPL).
