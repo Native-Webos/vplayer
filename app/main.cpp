@@ -95,15 +95,11 @@ class MainScreen : public Screen {
         bar.set_height(Dim::fixed(vui::metric::top_bar_h));
         auto &brand = bar.add<Row>(14);
         brand.set_align(Align::Start, Align::Center);
-        auto &mark = brand.add<View>();
+        auto &mark = brand.add<ImageView>(vui::icon("logo-pylon"));  // the app icon's mark
         mark.set_size(44, 44);
-        mark.set_background(vui::col::accent, 14);
+        mark.set_fit(ImageFit::Contain);
         mark.set_align(Align::Start, Align::Center);
-        auto &play = mark.add<ImageView>(vui::icon("logo-play"));
-        play.set_size(22, 22);
-        play.set_fit(ImageFit::Contain);
-        play.set_align(Align::Center, Align::Center);
-        auto &word = brand.add<Label>("VPlayer");
+        auto &word = brand.add<Label>("Pylon");
         word.set_font_size(28);
         word.set_bold(true);
         word.set_align(Align::Start, Align::Center);
@@ -506,7 +502,7 @@ class App : public wnk::app::Delegate {
     void set_up_subtitles(Ui &ui) {
         auto d = std::make_unique<wnk::ui::Dialog>(
             "Subtitle downloads",
-            "VPlayer searches OpenSubtitles with your own free account: sign up at opensubtitles.com, then under "
+            "Pylon searches OpenSubtitles with your own free account: sign up at opensubtitles.com, then under "
             "your profile create an API consumer for its key. Free accounts can download a few subtitles a day.");
         const auto &a = services_.subtitles_account;
         auto &key = d->body().add<wnk::ui::TextField>("API key");
@@ -619,7 +615,7 @@ class App : public wnk::app::Delegate {
                                                    : vplayer::languages()[static_cast<size_t>(i - 2)].code;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
-        d->add_button("About VPlayer", [this](Ui &u) { show_about(u); });
+        d->add_button("About Pylon", [this](Ui &u) { show_about(u); });
         d->add_button("Close");
         ui.show_dialog(std::move(d));
     }
@@ -634,8 +630,8 @@ class App : public wnk::app::Delegate {
         } else {
             msg = "libVLC is not available: " + vlc_info_->error;
         }
-        msg += "\nVPlayer uses libVLC (LGPL) and is not affiliated with VideoLAN.";
-        auto d = std::make_unique<Dialog>("About VPlayer", msg);
+        msg += "\nPylon uses libVLC (LGPL) and is not affiliated with VideoLAN.";
+        auto d = std::make_unique<Dialog>("About Pylon", msg);
         d->add_button("Close");
         ui.show_dialog(std::move(d));
     }
@@ -666,7 +662,7 @@ class App : public wnk::app::Delegate {
 int main(int argc, char **argv) {
     wnk::app::AppConfig config;
     config.fallback_app_id = "com.sostk.vplayer";  // used when $APPID is unset (host runs)
-    config.title = "VPlayer";
+    config.title = "Pylon";
     config.script_env_prefix = "APP_VPLAYER";  // APP_VPLAYER_KEYS=Return,Escape drives the host smoke test
     config.theme = vplayer::ui::make_theme();
     config.storage = true;

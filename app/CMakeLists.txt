@@ -63,7 +63,7 @@ add_custom_command(TARGET vplayer POST_BUILD
 wnk_add_webos_package(
         TARGET vplayer
         APPID com.sostk.vplayer
-        TITLE "VPlayer"
+        TITLE "Pylon"
         VERSION 0.1.0
         VENDOR "sostk"
         ICON "${CMAKE_CURRENT_SOURCE_DIR}/icon.png"
