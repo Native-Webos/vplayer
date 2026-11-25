@@ -543,46 +543,62 @@ class App : public wnk::app::Delegate {
 
     void show_settings(Ui &ui) {
         auto d = std::make_unique<Dialog>("Settings");
+        // Grouped, in a list that scrolls with the focus (more rows than fit on the screen).
+        auto &scroll = d->body().add<wnk::ui::ScrollView>();
+        scroll.set_width(Dim::fill());
+        scroll.set_height(Dim::fixed(700));
+        auto &body = scroll.add<Column>(12);
+        body.set_width(Dim::fill());
+        auto section = [&body](const char *title) {
+            auto &l = body.add<Label>(title);
+            l.set_font_size(18);
+            l.set_bold(true);
+            l.set_color(vui::col::accent);
+            l.set_padding(Insets{6, 14, 0, 2});
+        };
+        section("PLAYBACK");
         const std::vector<std::string> decoders = {"Automatic (the TV's decoder when it can)", "Software (VLC) only"};
-        d->body().add<wnk::ui::Choice>("Decoder", decoders, settings_.software_only ? 1 : 0, [this](Ui &, int i) {
+        body.add<wnk::ui::Choice>("Decoder", decoders, settings_.software_only ? 1 : 0, [this](Ui &, int i) {
             settings_.software_only = i == 1;
             decoder_ = settings_.software_only ? "software" : "auto";
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
-        d->body().add<wnk::ui::Toggle>("Continue where I stopped", settings_.resume, [this](Ui &, bool on) {
+        body.add<wnk::ui::Toggle>("Continue where I stopped", settings_.resume, [this](Ui &, bool on) {
             settings_.resume = on;
             history_.set_resume(on);
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
+        body.add<wnk::ui::Toggle>("Disc menus (DVD and Blu-ray images)", settings_.disc_menus, [this](Ui &, bool on) {
+            settings_.disc_menus = on;
+            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
+        });
+        section("SUBTITLES");
         const std::vector<std::string> sizes = {"Small", "Normal", "Large", "Huge"};
-        d->body().add<wnk::ui::Choice>("Subtitle size", sizes, settings_.subtitle_size, [this](Ui &, int i) {
+        body.add<wnk::ui::Choice>("Subtitle size", sizes, settings_.subtitle_size, [this](Ui &, int i) {
             settings_.subtitle_size = i;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
-        d->body().add<wnk::ui::Toggle>("Subtitles on a dark box", settings_.subtitle_box, [this](Ui &, bool on) {
+        body.add<wnk::ui::Toggle>("Subtitles on a dark box", settings_.subtitle_box, [this](Ui &, bool on) {
             settings_.subtitle_box = on;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
-        d->body().add<wnk::ui::Choice>("Subtitle colour", std::vector<std::string>{"White", "Yellow"}, settings_.subtitle_colour,
+        body.add<wnk::ui::Choice>("Subtitle colour", std::vector<std::string>{"White", "Yellow"}, settings_.subtitle_colour,
                                        [this](Ui &, int i) {
                                            settings_.subtitle_colour = i;
                                            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
                                        });
-        d->body().add<wnk::ui::Choice>("Audio to the TV",
+        // Subtitle downloads: the viewer's own OpenSubtitles account and API key.
+        body.add<wnk::ui::ValueRow>("Subtitle downloads",
+                                         services_.subtitles_account.configured() ? "OpenSubtitles · " + services_.subtitles_account.username
+                                                                                   : "Not set up",
+                                         [this](Ui &u) { set_up_subtitles(u); });
+        section("AUDIO AND LANGUAGES");
+        body.add<wnk::ui::Choice>("Audio to the TV",
                                        std::vector<std::string>{"Automatic (as it is, or AC-3)", "Always decoded (PCM)"},
                                        settings_.audio_pcm ? 1 : 0, [this](Ui &, int i) {
                                            settings_.audio_pcm = i == 1;
                                            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
                                        });
-        d->body().add<wnk::ui::Toggle>("Disc menus (DVD and Blu-ray images)", settings_.disc_menus, [this](Ui &, bool on) {
-            settings_.disc_menus = on;
-            vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
-        });
-        // Subtitle downloads: the viewer's own OpenSubtitles account and API key.
-        d->body().add<wnk::ui::ValueRow>("Subtitle downloads",
-                                         services_.subtitles_account.configured() ? "OpenSubtitles · " + services_.subtitles_account.username
-                                                                                   : "Not set up",
-                                         [this](Ui &u) { set_up_subtitles(u); });
         // Languages: the audio track, and whether (and which) subtitles start on.
         const auto &langs = vplayer::languages();
         std::vector<std::string> audio_names{"As the file says"}, sub_names{"As the file says", "Always on (first track)"};
@@ -593,11 +609,11 @@ class App : public wnk::app::Delegate {
             if (settings_.audio_language == langs[i].code) audio_at = static_cast<int>(i) + 1;
             if (settings_.subtitle_language == langs[i].code) sub_at = static_cast<int>(i) + 2;
         }
-        d->body().add<wnk::ui::Choice>("Audio language", audio_names, audio_at, [this](Ui &, int i) {
+        body.add<wnk::ui::Choice>("Audio language", audio_names, audio_at, [this](Ui &, int i) {
             settings_.audio_language = i == 0 ? std::string() : vplayer::languages()[static_cast<size_t>(i - 1)].code;
             vplayer::save_settings(services_.ctx->store(), settings_, services_.ctx->pool());
         });
-        d->body().add<wnk::ui::Choice>("Subtitles", sub_names, sub_at, [this](Ui &, int i) {
+        body.add<wnk::ui::Choice>("Subtitle language", sub_names, sub_at, [this](Ui &, int i) {
             settings_.subtitle_language = i == 0   ? std::string()
                                           : i == 1 ? std::string("any")
                                                    : vplayer::languages()[static_cast<size_t>(i - 2)].code;
