@@ -245,6 +245,7 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
     info_.uri = uri;
     const size_t dot = uri.rfind('.');
     info_.container = dot == std::string::npos ? "" : uri.substr(dot + 1);
+    const libvlc_media_parsed_status_t parsed = libvlc_media_get_parsed_status(media_);
     const libvlc_time_t d = libvlc_media_get_duration(media_);
     info_.duration_us = d > 0 ? d * 1000 : kNoTime;
     info_.seekable = !url || uri.rfind("file://", 0) == 0 || d > 0;
@@ -293,7 +294,10 @@ bool VlcSource::open(const std::string &uri, std::string *error) {
     if (n > 0) libvlc_media_tracks_release(tracks, n);
     // Some live streams (HLS from a Wowza "smil" playlist, ...) parse with no track: VLC's preparser
     // stops before the segments. Start the stream briefly and take the tracks from what it delivers.
-    if (info_.tracks.empty() && url) probe_tracks();
+    if (info_.tracks.empty() && url) {
+        WNK_LOGI(kCat, "parse found no track (status %d): probing", static_cast<int>(parsed));
+        probe_tracks();
+    }
     // Settings: the preferred language's audio track plays, when the file has one.
     if (prefer_audio_) {
         auto it = std::find_if(info_.tracks.begin(), info_.tracks.end(), [this](const media::TrackInfo &t) {
@@ -339,7 +343,18 @@ void VlcSource::probe_tracks() {
         auto has = [this](media::TrackType t) {
             return std::any_of(probed_.begin(), probed_.end(), [t](const media::TrackInfo &x) { return x.type == t; });
         };
-        cv_.wait_for(lock, std::chrono::seconds(15), [&] { return interrupted_ || has(media::TrackType::Video); });
+        // Not when the stream ends or fails first (an address that does not answer): at once.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (!interrupted_ && !has(media::TrackType::Video) && std::chrono::steady_clock::now() < deadline) {
+            cv_.wait_for(lock, std::chrono::milliseconds(100), [&] { return interrupted_ || has(media::TrackType::Video); });
+            lock.unlock();
+            const libvlc_state_t st = libvlc_media_player_get_state(mp_);
+            lock.lock();
+            if (st == libvlc_Error || st == libvlc_Ended) {
+                WNK_LOGW(kCat, "probe: the stream %s", st == libvlc_Error ? "failed" : "ended");
+                break;
+            }
+        }
         if (!interrupted_ && has(media::TrackType::Video))
             cv_.wait_for(lock, std::chrono::milliseconds(1500), [&] { return interrupted_ || has(media::TrackType::Audio); });
     }
