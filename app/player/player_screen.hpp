@@ -174,6 +174,8 @@ class PlayerScreen : public wnk::ui::Screen {
     wnk::ui::Label *title_ = nullptr, *subtitle_ = nullptr;
     wnk::ui::Label *time_ = nullptr, *length_ = nullptr, *format_ = nullptr;
     wnk::ui::Label *chapter_ = nullptr, *ends_ = nullptr;
+    wnk::ui::Label *button_hint_ = nullptr;  // the focused control's name, in the bar's top row
+    View *buttons_ = nullptr;
     wnk::ui::Spinner *spinner_ = nullptr;
     SeekBar *seek_ = nullptr;
     PlayPauseButton *play_ = nullptr;

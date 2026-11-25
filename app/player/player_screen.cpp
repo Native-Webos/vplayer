@@ -796,6 +796,10 @@ PlayerScreen::PlayerScreen(Services &services, Navigator &nav, Opener open, std:
     chapter_->set_font_size(20);
     chapter_->set_color(col::text_soft);
     info_row.add<View>().set_width(Dim::fill());
+    button_hint_ = &info_row.add<Label>("");
+    button_hint_->set_font_size(20);
+    button_hint_->set_bold(true);
+    info_row.add<View>().set_width(Dim::fill());
     ends_ = &info_row.add<Label>("");
     ends_->set_font_size(20);
     ends_->set_color(col::text_soft);
@@ -815,6 +819,7 @@ PlayerScreen::PlayerScreen(Services &services, Navigator &nav, Opener open, std:
     length_->set_align(Align::End, Align::Center);
 
     auto &buttons = panel.add<Row>(16);
+    buttons_ = &buttons;
     auto round = [](Row &row, const char *icon, const char *label, ClickHandler h) -> View & {
         auto &b = row.add<ui::IconButton>(ui::icon(icon), label, std::move(h), 64);
         b.set_background(kButton, 32);
@@ -1565,6 +1570,11 @@ void PlayerScreen::update(Ui &ui, float dt) {
         }
     }
 
+    // What the focused round button does (icons alone leave people guessing).
+    std::string hint;
+    if (controls_ && ui.has_focus_within(buttons_))
+        if (const View *f = ui.focused()) hint = f->accessible_text();
+    button_hint_->set_text(hint);
     time_->set_text(clock_text(t));
     length_->set_text(len > 0 ? clock_text(len) : "");
     seek_->progress = len > 0 ? static_cast<float>(t) / static_cast<float>(len) : 0;
