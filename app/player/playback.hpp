@@ -193,6 +193,9 @@ class Playback {
     // False where set_rate does nothing (the TV decoder path, until its audio can be stretched).
     virtual bool can_change_rate() const { return true; }
     virtual void set_rate(float) {}
+    // Frame by frame: pauses, then shows the next frame (the software path: the TV decoder cannot).
+    virtual bool can_step_frame() const { return false; }
+    virtual void step_frame() {}
     virtual std::vector<Chapter> chapters() const { return {}; }
     // Discs: their titles (empty for files with only one), the current one, switching.
     virtual std::vector<Title> titles() const { return {}; }

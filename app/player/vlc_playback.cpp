@@ -212,6 +212,10 @@ class VlcPlayback final : public Playback {
     void set_rate(float r) override {
         if (mp_) libvlc_media_player_set_rate(mp_, r);
     }
+    bool can_step_frame() const override { return mp_ != nullptr && libvlc_media_player_has_vout(mp_) > 0; }
+    void step_frame() override {
+        if (mp_) libvlc_media_player_next_frame(mp_);
+    }
     bool can_snapshot() const override { return mp_ != nullptr; }
     bool snapshot(const std::string &png_path) override {
         return mp_ != nullptr && libvlc_video_take_snapshot(mp_, 0, png_path.c_str(), 0, 0) == 0;

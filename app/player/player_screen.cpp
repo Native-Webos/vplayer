@@ -597,6 +597,8 @@ class PlayerPanel : public View {
                 screen_.close_panel(ui);
             });
         }
+        if (p.can_step_frame())
+            rows_->add<ValueRow>("Next frame", "Pauses; each OK is one frame", [this](Ui &) { screen_.playback()->step_frame(); });
         section("SPEED AND REPEAT");
         if (p.can_change_rate()) {
             rows_->add<Choice>("Speed", kSpeedNames, st.speed, [this](Ui &, int i) {
