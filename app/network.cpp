@@ -230,7 +230,12 @@ bool list_network_folder(libvlc_instance_t *vlc_, const std::string &mrl, std::v
         return false;
     }
     // Network access, and dialogs (sign-in) allowed; 30 s at most, cancellable.
-    if (show_all) libvlc_media_add_option(m, ":ignore-filetypes=");
+    // Every file: VLC's list without its subtitle and picture types (an empty value would mean its
+    // default), and subtitle files listed rather than attached to the videos they match.
+    if (show_all) {
+        libvlc_media_add_option(m, ":ignore-filetypes=db,nfo,ini,sfv,txt,cue");
+        libvlc_media_add_option(m, ":no-sub-autodetect-file");
+    }
     const auto flags = static_cast<libvlc_media_parse_flag_t>(libvlc_media_parse_network |
                                                               (interact ? libvlc_media_do_interact : 0));
     libvlc_media_parse_with_options(m, flags, 30000);

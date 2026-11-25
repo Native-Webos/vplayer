@@ -976,6 +976,7 @@ void PlayerScreen::offer_subtitle_files(Ui &ui) {
     const std::string path = queue_[index_].path;
     const uint64_t which = opened_;
     auto show = [this, which](Ui &u, std::vector<std::pair<std::string, std::string>> files) {  // name, path
+        WNK_LOGI(kCat, "subtitle files in the folder: %zu%s", files.size(), which != opened_ || !playback_ ? " (too late)" : "");
         if (which != opened_ || !playback_) return;
         if (files.empty()) {
             u.toast("No subtitle files in this folder.");
