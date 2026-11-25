@@ -129,5 +129,11 @@ if command -v cargo >/dev/null && cargo build --offline --release --manifest-pat
 else
     echo "dv81.mkv skipped (cargo or the dolby_vision crate not available offline)"
 fi
+# A 4:3 frame (1440×1080) holding a 16:9 picture between black bars, for Crop: Fit boxes it on four
+# sides, Crop 16:9 fills the screen.
+ffmpeg "${q[@]}" -f lavfi -i testsrc2=size=1440x810:rate=25 -f lavfi -i sine=frequency=330:sample_rate=48000 -t 300 \
+    -vf "pad=1440:1080:0:135:black,drawbox=x=0:y=135:w=1440:h=810:color=white:t=4" \
+    -c:v libx264 -preset veryfast -g 50 -pix_fmt yuv420p -c:a aac -b:a 96k letterbox-4x3.mp4
+
 rm -f en.srt sync.srt styled.ass fr.vtt labels.sup chapters.txt plain-tt.ts plain-cc.h264 cc.h264
 ls -la; ls -R Music

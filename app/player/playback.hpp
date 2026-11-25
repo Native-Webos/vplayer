@@ -166,10 +166,11 @@ class Playback {
     // How text subtitles should look (Settings): height as a fraction of the picture, on a box.
     // Aspect mode and zoom for engines whose picture the screen does not draw (the TV decoder):
     // the picture's rectangle on screen. False when the engine draws through VideoView instead.
-    // `mode` is an AspectMode (video_view.hpp) as an int.
-    virtual bool set_picture_area(int mode, float zoom) {
+    // `mode` is an AspectMode (video_view.hpp) as an int; `crop` a ratio (crop_ratio), 0 for none.
+    virtual bool set_picture_area(int mode, float zoom, float crop) {
         (void)mode;
         (void)zoom;
+        (void)crop;
         return false;
     }
     // How text subtitles should look (Settings): height as a fraction of the picture, on a box, yellow.

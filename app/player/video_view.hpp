@@ -10,6 +10,8 @@
 #include "wnk/ui/widgets.hpp"
 
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace vplayer {
 
@@ -17,6 +19,13 @@ namespace vplayer {
 // the screen; the ratios force a display aspect; Stretch ignores it.
 enum class AspectMode : int { Fit = 0, Fill, R16x9, R4x3, R21x9, Stretch, Count };
 const char *aspect_name(AspectMode m);
+// Crop (VLC's ratios): keep the middle of the picture at this ratio, as for a film with black bars
+// in its picture. 0 is "Off".
+const std::vector<std::string> &crop_names();
+float crop_ratio(int index);  // 0 for Off
+// Scale factors that show a picture of display ratio `dar` cropped to `crop` (0: none): the picture
+// is drawn at the crop's ratio, then enlarged by these so the cut part falls outside.
+void crop_scale(float dar, float crop, float *dar_out, float *grow_x, float *grow_y);
 
 class VideoView : public wnk::ui::GlView {
  public:
@@ -24,6 +33,7 @@ class VideoView : public wnk::ui::GlView {
     void set_sink(std::shared_ptr<FrameSink> frames);  // the next file's frames
     void set_aspect(AspectMode m) { aspect_ = m; invalidate_content(); }
     void set_zoom(float z) { zoom_ = z; invalidate_content(); }  // 1 = none
+    void set_crop(float ratio) { crop_ = ratio; invalidate_content(); }  // 0 = none
     ~VideoView() override;
     bool has_frame() const { return frames_shown_ > 0; }
     // Call every UI update: schedules a redraw when the sink has a frame newer than the one shown.
@@ -45,6 +55,7 @@ class VideoView : public wnk::ui::GlView {
     uint64_t polled_ = 0;
     AspectMode aspect_ = AspectMode::Fit;
     float zoom_ = 1;
+    float crop_ = 0;
 };
 
 }  // namespace vplayer

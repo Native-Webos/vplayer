@@ -3,6 +3,7 @@
 #include "vlc_engine.hpp"
 
 #include "player/subtitle_text.hpp"
+#include "player/video_view.hpp"
 #include "player/vlc_source.hpp"
 
 #include "wnk/log.hpp"
@@ -243,9 +244,10 @@ class HwPlayback final : public Playback {
             return subrip_ass_header(look_scale_, look_box_, look_yellow_, lift_);
         return header;
     }
-    bool set_picture_area(int mode, float zoom) override {
+    bool set_picture_area(int mode, float zoom, float crop) override {
         area_mode_ = mode;
         area_zoom_ = zoom;
+        area_crop_ = crop;
         apply_area();
         return true;
     }
@@ -361,6 +363,7 @@ class HwPlayback final : public Playback {
     float lift_ = 0.07f;  // SubRip lines' bottom margin (set_subtitle_lift)  // closed captions shown (from the video, not a libVLC track)
     int area_mode_ = 0;  // AspectMode: Fit
     float area_zoom_ = 1;
+    float area_crop_ = 0;
     float look_scale_ = 0.055f;
     bool look_box_ = false;
     bool look_yellow_ = false;
@@ -381,14 +384,16 @@ class HwPlayback final : public Playback {
         if (area_mode_ == 2) dar = 16.0f / 9;
         if (area_mode_ == 3) dar = 4.0f / 3;
         if (area_mode_ == 4) dar = 21.0f / 9;
+        float grow_x = 1, grow_y = 1;
+        crop_scale(dar, area_crop_, &dar, &grow_x, &grow_y);
         float w = 1920, h = 1080;
         if (area_mode_ == 1) {  // Fill: cover the screen
             if (dar > screen) w = 1080 * dar; else h = 1920 / dar;
         } else if (area_mode_ != 5) {  // fit, at the mode's ratio (Stretch: the whole screen)
             if (dar > screen) h = 1920 / dar; else w = 1080 * dar;
         }
-        w *= area_zoom_;
-        h *= area_zoom_;
+        w *= area_zoom_ * grow_x;
+        h *= area_zoom_ * grow_y;
         controller_->set_video_area({(1920 - w) / 2, (1080 - h) / 2, w, h});
     }
     bool paused_ = false;

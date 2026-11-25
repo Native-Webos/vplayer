@@ -58,6 +58,7 @@ struct PlayerSettings {
     }
     AspectMode aspect = AspectMode::Fit;
     int zoom = 100;              // percent
+    int crop = 0;                // index into crop_names()
     int deinterlace = 0;         // index into kDeinterlace
     PictureAdjust adjust;
     int speed = 3;               // index into kSpeeds (1×)
@@ -97,6 +98,8 @@ class PlayerScreen : public wnk::ui::Screen {
     bool has_previous() const { return index_ > 0; }
     void open_panel(wnk::ui::Ui &ui, int tab);
     void close_panel(wnk::ui::Ui &ui);
+    // The picture's aspect mode, zoom and crop (settings()) to the view and the engine.
+    void apply_picture();
     void apply_speed();
     // The audio effects changed: applied live where the engine can, else the file reopens here.
     void apply_effects(wnk::ui::Ui &ui);

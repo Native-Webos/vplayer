@@ -64,6 +64,29 @@ void yuv_matrix(bool bt709, bool full, float m[9]) {
 
 }  // namespace
 
+const std::vector<std::string> &crop_names() {
+    static const std::vector<std::string> names{"Off",    "16:9",   "16:10",  "4:3", "1.85:1",
+                                                "2.21:1", "2.35:1", "2.39:1", "5:4", "1:1"};
+    return names;
+}
+
+float crop_ratio(int index) {
+    static const float ratios[] = {0, 16.0f / 9, 16.0f / 10, 4.0f / 3, 1.85f, 2.21f, 2.35f, 2.39f, 5.0f / 4, 1};
+    return index > 0 && index < static_cast<int>(std::size(ratios)) ? ratios[index] : 0;
+}
+
+void crop_scale(float dar, float crop, float *dar_out, float *grow_x, float *grow_y) {
+    *grow_x = *grow_y = 1;
+    *dar_out = dar;
+    if (crop <= 0 || dar <= 0) return;
+    if (crop > dar) {
+        *grow_y = crop / dar;  // wider: the top and bottom go
+    } else {
+        *grow_x = dar / crop;  // narrower: the sides go
+    }
+    *dar_out = crop;
+}
+
 const char *aspect_name(AspectMode m) {
     switch (m) {
         case AspectMode::Fit: return "Fit";
@@ -186,6 +209,8 @@ void VideoView::render_gl(const wnk::render::CustomTarget &t, double) {
         case AspectMode::R21x9: dar = 21.0f / 9; break;
         default: break;
     }
+    float grow_x = 1, grow_y = 1;
+    crop_scale(dar, crop_, &dar, &grow_x, &grow_y);
     const float view = static_cast<float>(t.width) / std::max(1, t.height);
     float sx = 1, sy = 1;
     if (aspect_ == AspectMode::Fill) {
@@ -202,8 +227,8 @@ void VideoView::render_gl(const wnk::render::CustomTarget &t, double) {
             sx = dar / view;
         }
     }
-    sx *= zoom_;
-    sy *= zoom_;
+    sx *= zoom_ * grow_x;
+    sy *= zoom_ * grow_y;
     const GLfloat quad[] = {
         // x, y, u, v  (v flipped: row 0 of the picture is the top)
         -sx, -sy, 0, 1,  sx, -sy, 1, 1,  -sx, sy, 0, 0,  sx, sy, 1, 0,
