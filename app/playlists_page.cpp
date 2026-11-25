@@ -137,7 +137,8 @@ void PlaylistsPage::on_shown(Ui &ui) {
         [this](std::vector<platform::FileEntry> files) {
             files_ = std::move(files);
             // Not while a list opens: showing the lists would cancel its loading.
-            if (level_ == Level::Root && !opening_) show_root(s_.ctx->ui(), true);
+            // The focus stays where it is (the viewer may be moving along the tabs).
+            if (level_ == Level::Root && !opening_) show_root(s_.ctx->ui(), s_.ctx->ui().has_focus_within(this));
         });
 }
 
@@ -181,7 +182,7 @@ void PlaylistsPage::show_root(Ui &ui, bool focus) {
     });
     message_->set_visible(false);
     hint_->set_text(manageable ? "Hold OK on a list for its options (rename, edit, delete), or click its three dots." : "");
-    if ((focus && had) || focus) grid_->focus_index(ui, std::min(at, root_.size() - 1));
+    if (focus) grid_->focus_index(ui, std::min(at, root_.size() - 1));
 }
 
 void PlaylistsPage::open_list(Ui &ui, const std::string &name, const std::string &location) {

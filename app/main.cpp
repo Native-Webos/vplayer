@@ -64,6 +64,25 @@ struct EngineResult {
 constexpr const char *kSecretsKey = "com.sostk.vplayer.secrets.v1";
 constexpr const char *kSubtitlesAccount = "opensubtitles.account";
 
+// The top bar: Left and Right move along `order` (the tabs, search, settings) instead of falling back
+// to geometry, which from the search button went down into the page.
+class TopBar : public Row {
+ public:
+    using Row::Row;
+    std::vector<View *> order;
+    bool on_action(Ui &ui, const wnk::input::ActionEvent &e) override {
+        const bool left = e.action == wnk::input::Action::Left, right = e.action == wnk::input::Action::Right;
+        if (!left && !right) return Row::on_action(ui, e);
+        const auto it = std::find(order.begin(), order.end(), ui.focused());
+        if (it == order.end()) return Row::on_action(ui, e);
+        const auto at = static_cast<size_t>(it - order.begin());
+        if ((left && at == 0) || (right && at + 1 == order.size())) return true;  // the ends stay put
+        if (e.phase == wnk::input::Phase::Release) return true;
+        ui.focus(order[left ? at - 1 : at + 1]);
+        return true;
+    }
+};
+
 class MainScreen : public Screen {
  public:
     MainScreen(vplayer::Services &services, std::function<void(Ui &)> on_settings, std::function<void(Ui &)> on_search)
@@ -72,7 +91,7 @@ class MainScreen : public Screen {
         col.set_padding(Insets{vui::metric::screen_x, vui::metric::screen_y, vui::metric::screen_x, vui::metric::screen_y});
 
         // ---- top bar ----
-        auto &bar = col.add<Row>(40);
+        auto &bar = col.add<TopBar>(40);
         bar.set_height(Dim::fixed(vui::metric::top_bar_h));
         auto &brand = bar.add<Row>(14);
         brand.set_align(Align::Start, Align::Center);
@@ -97,7 +116,12 @@ class MainScreen : public Screen {
         actions.set_align(Align::End, Align::Center);
         actions.add<vui::IconButton>(vui::icon("search"), "Search",
                                      [this](Ui &ui) { open_search_(ui); }).name = "top.search";
-        actions.add<vui::IconButton>(vui::icon("settings"), "Settings", std::move(on_settings)).name = "top.settings";
+        auto &settings_btn = actions.add<vui::IconButton>(vui::icon("settings"), "Settings", std::move(on_settings));
+        settings_btn.name = "top.settings";
+        // Left and Right go along the bar (tabs, then search and settings), not down into the page.
+        for (int i = 0; i < 5; ++i) bar.order.push_back(&tabs_->tab(i));
+        bar.order.push_back(actions.children()[0].get());
+        bar.order.push_back(&settings_btn);
 
         // ---- pages ----
         auto &stack = col.add<View>();
