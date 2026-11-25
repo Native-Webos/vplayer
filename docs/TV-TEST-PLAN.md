@@ -69,6 +69,9 @@ Then the rest of the sections as time allows.
 | 7b.22 subtitle file from a share | Pass after a fix (VLC's listing attached the file to its video instead of listing it) |
 | 7b.25 a long Choice list | Pass (the kit's fix: the list scrolls with the focus) |
 | Regression: DV Profile 7 TrueHD, skips | Pass; skips now use the kit's splice (the decoder's clock runs on; the shown time is right) |
+| 3.1, 3.2 DLNA (test server: `app/tools/net-test/run.sh`) | Pass: "VPlayer test · DLNA media server" found; its folders browse (All Video: 15 files); a video plays on the TV decoder in 0.7 s |
+| 3.8 FTP | Pass: plays on the TV decoder; a skip lands where asked |
+| 3.8 SFTP (stock OpenSSH 10) | Pass after two fixes: opening one ended the app (libgcrypt found no /dev/random in the app's jail: patch 0006), then every current server refused VLC's old key exchanges (libssh2 now on OpenSSL: patch 0007). First frame 2.4 s, skips land |
 
 Follow-ups found in the first pass (effect changes reopening once per step, no thumbnails on
 Continue watching) are done.
