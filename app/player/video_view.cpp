@@ -209,6 +209,7 @@ void VideoView::render_gl(const wnk::render::CustomTarget &t, double) {
         case AspectMode::R21x9: dar = 21.0f / 9; break;
         default: break;
     }
+    if (turns_ % 2 == 1) dar = 1 / dar;  // a quarter turn: the picture is as tall as it was wide
     float grow_x = 1, grow_y = 1;
     crop_scale(dar, crop_, &dar, &grow_x, &grow_y);
     const float view = static_cast<float>(t.width) / std::max(1, t.height);
@@ -229,10 +230,25 @@ void VideoView::render_gl(const wnk::render::CustomTarget &t, double) {
     }
     sx *= zoom_ * grow_x;
     sy *= zoom_ * grow_y;
-    const GLfloat quad[] = {
-        // x, y, u, v  (v flipped: row 0 of the picture is the top)
-        -sx, -sy, 0, 1,  sx, -sy, 1, 1,  -sx, sy, 0, 0,  sx, sy, 1, 0,
+    // Each corner of the screen rectangle (x right, y down, 0..1) shows the picture point turned and
+    // mirrored back: a clockwise quarter turn shows (y, 1 - x) at (x, y).
+    auto uv = [this](float x, float y, GLfloat *u, GLfloat *v) {
+        if (mirror_) x = 1 - x;
+        switch (turns_) {
+            case 1: *u = y, *v = 1 - x; break;
+            case 2: *u = 1 - x, *v = 1 - y; break;
+            case 3: *u = 1 - y, *v = x; break;
+            default: *u = x, *v = y; break;
+        }
     };
+    GLfloat quad[] = {
+        // x, y (GL: y up), u, v (row 0 of the picture is the top)
+        -sx, -sy, 0, 0,  sx, -sy, 0, 0,  -sx, sy, 0, 0,  sx, sy, 0, 0,
+    };
+    uv(0, 1, &quad[2], &quad[3]);    // bottom left
+    uv(1, 1, &quad[6], &quad[7]);    // bottom right
+    uv(0, 0, &quad[10], &quad[11]);  // top left
+    uv(1, 0, &quad[14], &quad[15]);  // top right
 
     glUseProgram(program_);
     float m[9];

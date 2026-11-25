@@ -64,6 +64,8 @@ struct PlayerSettings {
     AspectMode aspect = AspectMode::Fit;
     int zoom = 100;              // percent
     int crop = 0;                // index into crop_names()
+    int rotate = 0;              // quarter turns clockwise (the software path)
+    bool mirror = false;
     int deinterlace = 0;         // index into kDeinterlace
     PictureAdjust adjust;
     int speed = 3;               // index into kSpeeds (1×)

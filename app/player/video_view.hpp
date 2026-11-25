@@ -34,6 +34,12 @@ class VideoView : public wnk::ui::GlView {
     void set_aspect(AspectMode m) { aspect_ = m; invalidate_content(); }
     void set_zoom(float z) { zoom_ = z; invalidate_content(); }  // 1 = none
     void set_crop(float ratio) { crop_ = ratio; invalidate_content(); }  // 0 = none
+    // Quarter turns clockwise (0..3), then a left-right mirror: drawn by the view (the software path).
+    void set_transform(int quarter_turns, bool mirror) {
+        turns_ = ((quarter_turns % 4) + 4) % 4;
+        mirror_ = mirror;
+        invalidate_content();
+    }
     ~VideoView() override;
     bool has_frame() const { return frames_shown_ > 0; }
     // Call every UI update: schedules a redraw when the sink has a frame newer than the one shown.
@@ -56,6 +62,8 @@ class VideoView : public wnk::ui::GlView {
     AspectMode aspect_ = AspectMode::Fit;
     float zoom_ = 1;
     float crop_ = 0;
+    int turns_ = 0;
+    bool mirror_ = false;
 };
 
 }  // namespace vplayer

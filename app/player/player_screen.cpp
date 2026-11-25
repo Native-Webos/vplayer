@@ -539,6 +539,17 @@ class PlayerPanel : public View {
             screen_.apply_picture();
         });
         zoom.set_format([](float v) { return std::to_string(static_cast<int>(v)) + " %"; });
+        if (!p.video_plane()) {  // drawn by the app: the TV decoder's picture cannot turn
+            rows_->add<Choice>("Rotate", std::vector<std::string>{"None", "90° right", "180°", "90° left"}, st.rotate,
+                               [this](Ui &, int i) {
+                                   screen_.settings().rotate = i;
+                                   screen_.apply_picture();
+                               });
+            rows_->add<Toggle>("Mirror", st.mirror, [this](Ui &, bool on) {
+                screen_.settings().mirror = on;
+                screen_.apply_picture();
+            });
+        }
         if (p.can_filter_video()) {
             rows_->add<Choice>("Deinterlace", kDeinterlaceNames, st.deinterlace, [this](Ui &, int i) {
                 screen_.settings().deinterlace = i;
@@ -1351,6 +1362,7 @@ void PlayerScreen::apply_picture() {
     video_->set_aspect(settings_.aspect);
     video_->set_zoom(zoom);
     video_->set_crop(crop);
+    video_->set_transform(settings_.rotate, settings_.mirror);
     if (playback_) playback_->set_picture_area(static_cast<int>(settings_.aspect), zoom, crop);
 }
 
