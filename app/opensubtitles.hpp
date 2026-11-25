@@ -5,7 +5,7 @@
 // key). The API is used as the open-source clients of it use it (the Python "opensubtitlescom"
 // package, Jellyfin's plugin):
 //
-//   search    GET /subtitles?languages=..&moviehash=..&query=..  (Api-Key, User-Agent "VPlayer v0.1")
+//   search    GET /subtitles?languages=..&moviehash=..&query=..  (Api-Key, User-Agent "Pylon v0.1")
 //   login     POST /login {"username","password"} -> token (Bearer for downloads)
 //   download  POST /download {"file_id", "sub_format":"srt"} -> link, remaining; then GET link
 //

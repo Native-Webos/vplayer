@@ -297,7 +297,7 @@ void NetworkPage::activate(Ui &ui, size_t i) {
         return;
     }
     if (!e.playable()) {
-        ui.toast("VPlayer cannot open this kind of file.");
+        ui.toast("Pylon cannot open this kind of file.");
         return;
     }
     // The folder's playable entries are the queue (previous / next / play the next one).
@@ -443,7 +443,7 @@ void NetworkPage::ask_url(Ui &ui) {
 
 void NetworkPage::ask_server(Ui &ui) {
     auto d = std::make_unique<Dialog>("Add a server", "The server's name or IP address, and optionally a share or folder. "
-                                                      "VPlayer asks for a user name and password if the server needs one.");
+                                                      "Pylon asks for a user name and password if the server needs one.");
     auto protocol = std::make_shared<int>(0);
     d->body().add<Choice>("Protocol", kProtocols, 0, [protocol](Ui &, int i) { *protocol = i; });
     auto &host = d->body().add<TextField>("Address: nas.local or 192.168.1.20");

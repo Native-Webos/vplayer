@@ -967,7 +967,7 @@ void PlayerScreen::take_snapshot(Ui &ui) {
         ui.toast("Plug in a USB drive that can be written to, for snapshots.");
         return;
     }
-    const std::string folder = target->path + "/VPlayer snapshots";
+    const std::string folder = target->path + "/Pylon snapshots";
     ::mkdir(folder.c_str(), 0755);
     char stamp[32];
     const std::time_t now = std::time(nullptr);
@@ -977,7 +977,7 @@ void PlayerScreen::take_snapshot(Ui &ui) {
     for (size_t i = folder.size() + 1; i < safe.size(); ++i)
         if (safe[i] == ':' || safe[i] == '/') safe[i] = '.';  // FAT drives refuse ':'
     const bool ok = playback_->snapshot(safe);
-    ui.toast(ok ? "Snapshot saved in \"VPlayer snapshots\" on " + target->name : "The snapshot could not be saved.");
+    ui.toast(ok ? "Snapshot saved in \"Pylon snapshots\" on " + target->name : "The snapshot could not be saved.");
 }
 
 void PlayerScreen::restart_file(Ui &ui) {

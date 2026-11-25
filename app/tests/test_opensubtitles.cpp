@@ -131,7 +131,7 @@ TEST("client_signs_in_again_once_after_401") {
     REQUIRE(server->seen.size() == 5);
     CHECK_EQ(server->seen[0].url, std::string("https://api.opensubtitles.com/api/v1/login"));
     CHECK_EQ(header(server->seen[0], "Api-Key"), std::string("KEY"));
-    CHECK_EQ(header(server->seen[0], "User-Agent"), std::string("VPlayer v0.1"));
+    CHECK_EQ(header(server->seen[0], "User-Agent"), std::string("Pylon v0.1"));
     CHECK_EQ(header(server->seen[1], "Authorization"), std::string("Bearer t1"));
     CHECK(server->seen[1].body.find("\"file_id\":42") != std::string::npos);
     CHECK_EQ(header(server->seen[3], "Authorization"), std::string("Bearer t2"));

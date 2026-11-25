@@ -322,7 +322,7 @@ bool parse_playlist(const std::string &text, const std::string &location, Playli
         return l.find("://") != std::string::npos && l.find(' ') == std::string::npos;
     });
     if (addresses) return parse_m3u(lines, location, out);
-    *error = "not a playlist VPlayer reads (M3U, PLS or XSPF)";
+    *error = "not a playlist Pylon reads (M3U, PLS or XSPF)";
     return false;
 }
 

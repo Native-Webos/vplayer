@@ -198,7 +198,7 @@ std::unique_ptr<VlcEngine> VlcEngine::create(const std::string &app_dir, VlcInfo
         return nullptr;
     }
     libvlc_log_set(vlc, on_vlc_log, nullptr);
-    libvlc_set_user_agent(vlc, "VPlayer", "VPlayer/0.1 LibVLC");
+    libvlc_set_user_agent(vlc, "Pylon", "Pylon/0.1 LibVLC");
     libvlc_set_app_id(vlc, "com.sostk.vplayer", "0.1.0", "");
 
     if (libvlc_audio_output_t *list = libvlc_audio_output_list_get(vlc)) {

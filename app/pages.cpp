@@ -526,7 +526,7 @@ void BrowsePage::activate(Ui &ui, size_t i) {
             if (is_disc(e)) {
                 s_.play(e);
             } else {
-                ui.toast("VPlayer cannot open this kind of file yet.");
+                ui.toast("Pylon cannot open this kind of file yet.");
             }
             break;
     }

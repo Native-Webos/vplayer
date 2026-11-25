@@ -15,7 +15,7 @@ namespace {
 
 constexpr const char *kCat = "opensubs";
 constexpr const char *kBase = "https://api.opensubtitles.com/api/v1";
-constexpr const char *kUserAgent = "VPlayer v0.1";
+constexpr const char *kUserAgent = "Pylon v0.1";
 using json = nlohmann::json;
 
 std::string url_encode(const std::string &s) {
@@ -98,7 +98,7 @@ bool parse_search(const std::string &text, std::vector<Result> *out, std::string
     out->clear();
     const auto j = json::parse(text, nullptr, false);
     if (j.is_discarded() || !j.is_object() || !j.contains("data") || !j["data"].is_array()) {
-        *error = "an answer VPlayer does not understand";
+        *error = "an answer Pylon does not understand";
         return false;
     }
     for (const auto &d : j["data"]) {
@@ -138,7 +138,7 @@ bool parse_login(const std::string &text, std::string *token, std::string *error
 bool parse_download(const std::string &text, Download *out, std::string *error) {
     const auto j = json::parse(text, nullptr, false);
     if (j.is_discarded() || !j.is_object()) {
-        *error = "an answer VPlayer does not understand";
+        *error = "an answer Pylon does not understand";
         return false;
     }
     out->link = str(j, "link");

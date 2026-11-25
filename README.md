@@ -1,6 +1,6 @@
-# VPlayer: libVLC for LG webOS (working name)
+# Pylon: libVLC for LG webOS
 
-A native LG webOS app that brings VLC's playback engine (libVLC 3.0.24) to the TV: a remote-driven
+Pylon (code name VPlayer, app id `com.sostk.vplayer`) is a native LG webOS app that brings VLC's playback engine (libVLC 3.0.24) to the TV: a remote-driven
 UI on [webos-native-app-kit](https://github.com/Native-Webos/webos-native-app-kit), with the TV's hardware decoder
 for 4K/HDR and VLC's software decoders for everything else.
 
